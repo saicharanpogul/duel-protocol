@@ -28,6 +28,12 @@ pub mod duel {
         protection_activation_offset: u64,
         curve_params: state::CurveParams,
         total_supply_per_side: u64,
+        name_a: String,
+        symbol_a: String,
+        uri_a: String,
+        name_b: String,
+        symbol_b: String,
+        uri_b: String,
     ) -> Result<()> {
         instructions::initialize_market::handler(
             ctx,
@@ -41,6 +47,12 @@ pub mod duel {
             protection_activation_offset,
             curve_params,
             total_supply_per_side,
+            name_a,
+            symbol_a,
+            uri_a,
+            name_b,
+            symbol_b,
+            uri_b,
         )
     }
 

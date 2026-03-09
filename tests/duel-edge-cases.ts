@@ -6,6 +6,7 @@ import {
   PublicKey,
   SystemProgram,
   LAMPORTS_PER_SOL,
+  ComputeBudgetProgram,
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
@@ -15,6 +16,16 @@ import {
 } from "@solana/spl-token";
 import { expect } from "chai";
 import BN from "bn.js";
+
+const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+function findMetadataPda(mint: PublicKey): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("metadata"), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    TOKEN_METADATA_PROGRAM_ID
+  );
+  return pda;
+}
 
 describe("duel - edge cases & security", () => {
   const provider = anchor.AnchorProvider.env();
@@ -90,7 +101,13 @@ describe("duel - edge cases & security", () => {
         opts.sellPenaltyMaxBps,
         new BN(opts.protectionActivationOffset),
         curveParams,
-        totalSupply
+        totalSupply,
+        "Edge A",
+        "EA",
+        "",
+        "Edge B",
+        "EB",
+        "",
       )
       .accounts({
         creator: creator.publicKey,
@@ -99,10 +116,14 @@ describe("duel - edge cases & security", () => {
         tokenVaultA: tvA, tokenVaultB: tvB,
         solVaultA: svA, solVaultB: svB,
         protocolFeeAccount: protocolFeeAccount.publicKey,
+        metadataA: findMetadataPda(mintA),
+        metadataB: findMetadataPda(mintB),
+        tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
+      .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
       .rpc();
 
     return { market, sideA, sideB, mintA, mintB, tvA, tvB, svA, svB };

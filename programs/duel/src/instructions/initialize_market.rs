@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 
 use crate::constants::*;
+use crate::cpi::metaplex_metadata;
 use crate::errors::DuelError;
 use crate::events::MarketCreated;
 use crate::state::*;
@@ -103,6 +104,33 @@ pub struct InitializeMarket<'info> {
     /// CHECK: Arbitrary fee account, no validation needed
     pub protocol_fee_account: UncheckedAccount<'info>,
 
+    /// Metadata account for token A
+    /// CHECK: Created by Metaplex CPI, validated by seeds
+    #[account(
+        mut,
+        seeds = [b"metadata", metaplex_metadata::TOKEN_METADATA_PROGRAM_ID.as_ref(), token_mint_a.key().as_ref()],
+        bump,
+        seeds::program = metaplex_metadata::TOKEN_METADATA_PROGRAM_ID,
+    )]
+    pub metadata_a: UncheckedAccount<'info>,
+
+    /// Metadata account for token B
+    /// CHECK: Created by Metaplex CPI, validated by seeds
+    #[account(
+        mut,
+        seeds = [b"metadata", metaplex_metadata::TOKEN_METADATA_PROGRAM_ID.as_ref(), token_mint_b.key().as_ref()],
+        bump,
+        seeds::program = metaplex_metadata::TOKEN_METADATA_PROGRAM_ID,
+    )]
+    pub metadata_b: UncheckedAccount<'info>,
+
+    /// Metaplex Token Metadata Program
+    /// CHECK: Validated against known program ID
+    #[account(
+        constraint = token_metadata_program.key() == metaplex_metadata::TOKEN_METADATA_PROGRAM_ID @ DuelError::InvalidMarketConfig,
+    )]
+    pub token_metadata_program: UncheckedAccount<'info>,
+
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
@@ -120,6 +148,12 @@ pub fn handler(
     protection_activation_offset: u64,
     curve_params: CurveParams,
     total_supply_per_side: u64,
+    name_a: String,
+    symbol_a: String,
+    uri_a: String,
+    name_b: String,
+    symbol_b: String,
+    uri_b: String,
 ) -> Result<()> {
     let clock = Clock::get()?;
     let now = clock.unix_timestamp;
@@ -241,6 +275,38 @@ pub fn handler(
             signer_seeds,
         ),
         total_supply_per_side,
+    )?;
+
+    // Create Metaplex metadata for Side A
+    metaplex_metadata::create_metadata_v3(
+        ctx.accounts.metadata_a.to_account_info(),
+        ctx.accounts.token_mint_a.to_account_info(),
+        market.to_account_info(),
+        ctx.accounts.creator.to_account_info(),
+        market.to_account_info(),
+        ctx.accounts.system_program.to_account_info(),
+        ctx.accounts.rent.to_account_info(),
+        ctx.accounts.token_metadata_program.to_account_info(),
+        name_a,
+        symbol_a,
+        uri_a,
+        signer_seeds,
+    )?;
+
+    // Create Metaplex metadata for Side B
+    metaplex_metadata::create_metadata_v3(
+        ctx.accounts.metadata_b.to_account_info(),
+        ctx.accounts.token_mint_b.to_account_info(),
+        market.to_account_info(),
+        ctx.accounts.creator.to_account_info(),
+        market.to_account_info(),
+        ctx.accounts.system_program.to_account_info(),
+        ctx.accounts.rent.to_account_info(),
+        ctx.accounts.token_metadata_program.to_account_info(),
+        name_b,
+        symbol_b,
+        uri_b,
+        signer_seeds,
     )?;
 
     emit!(MarketCreated {

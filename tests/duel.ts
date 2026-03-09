@@ -6,6 +6,7 @@ import {
   PublicKey,
   SystemProgram,
   LAMPORTS_PER_SOL,
+  ComputeBudgetProgram,
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
@@ -15,6 +16,16 @@ import {
 } from "@solana/spl-token";
 import { expect } from "chai";
 import BN from "bn.js";
+
+const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+function findMetadataPda(mint: PublicKey): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("metadata"), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    TOKEN_METADATA_PROGRAM_ID
+  );
+  return pda;
+}
 
 // Rent-exempt minimum for a 0-data account
 const RENT_EXEMPT_MIN = 890_880;
@@ -129,7 +140,13 @@ describe("duel", () => {
           sellPenaltyMaxBps,
           new BN(protectionActivationOffset),
           curveParams,
-          totalSupplyPerSide
+          totalSupplyPerSide,
+          "Duel Side A",
+          "DUEL-A",
+          "https://duel.protocol/tokens/a",
+          "Duel Side B",
+          "DUEL-B",
+          "https://duel.protocol/tokens/b",
         )
         .accounts({
           creator: creator.publicKey,
@@ -143,10 +160,14 @@ describe("duel", () => {
           solVaultA: solVaultA,
           solVaultB: solVaultB,
           protocolFeeAccount: protocolFeeAccount.publicKey,
+          metadataA: findMetadataPda(mintA),
+          metadataB: findMetadataPda(mintB),
+          tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         })
+        .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
         .rpc();
 
       console.log("  initialize_market tx:", tx);
@@ -403,7 +424,13 @@ describe("duel", () => {
           0,    // no sell penalty
           new BN(0),
           curveParams,
-          totalSupplyPerSide
+          totalSupplyPerSide,
+          "Short A",
+          "SH-A",
+          "",
+          "Short B",
+          "SH-B",
+          "",
         )
         .accounts({
           creator: creator.publicKey,
@@ -412,10 +439,14 @@ describe("duel", () => {
           tokenVaultA: tvA, tokenVaultB: tvB,
           solVaultA: svA, solVaultB: svB,
           protocolFeeAccount: protocolFeeAccount.publicKey,
+          metadataA: findMetadataPda(mA),
+          metadataB: findMetadataPda(mB),
+          tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         })
+        .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
         .rpc();
 
       console.log("  short market created");
