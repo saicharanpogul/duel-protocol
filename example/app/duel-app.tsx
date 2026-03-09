@@ -57,6 +57,12 @@ export default function DuelApp() {
   const [balA, setBalA] = useState(0);
   const [balB, setBalB] = useState(0);
   const [loading, setLoading] = useState<string | null>(null);
+  const [now, setNow] = useState(Math.floor(Date.now() / 1000));
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const log = useCallback(
     (msg: string, type: LogEntry["type"] = "info") => {
@@ -365,6 +371,25 @@ export default function DuelApp() {
   const fmtSol = (lamports: number) => (lamports / LAMPORTS_PER_SOL).toFixed(4);
   const fmtTokens = (amt: number) => (amt / 1_000_000).toFixed(6);
 
+  const fmtCountdown = (seconds: number) => {
+    if (seconds <= 0) return "NOW ✅";
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}m ${s}s`;
+  };
+
+  const getTwapWindowOpens = () => {
+    if (!market) return null;
+    const dl = market.deadline.toNumber();
+    const tw = market.twapWindow.toNumber();
+    return dl - tw;
+  };
+
+  const getDeadline = () => {
+    if (!market) return null;
+    return market.deadline.toNumber();
+  };
+
   return (
     <div className="app">
       <header>
@@ -498,6 +523,22 @@ export default function DuelApp() {
                     ? new Date(
                         market.deadline.toNumber() * 1000
                       ).toLocaleTimeString()
+                    : "—"}
+                </span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">TWAP Window Opens</span>
+                <span className="stat-value">
+                  {getTwapWindowOpens() !== null
+                    ? fmtCountdown(getTwapWindowOpens()! - now)
+                    : "—"}
+                </span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">Time to Deadline</span>
+                <span className="stat-value">
+                  {getDeadline() !== null
+                    ? fmtCountdown(getDeadline()! - now)
                     : "—"}
                 </span>
               </div>
