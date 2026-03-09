@@ -62,8 +62,10 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
     // Must not already be resolved
     require!(market.status != MarketStatus::Resolved, DuelError::MarketAlreadyResolved);
 
-    // Must have TWAP samples
-    require!(market.twap_samples_count > 0, DuelError::NoTwapSamples);
+    // Must have sufficient TWAP samples to prevent manipulation
+    // Require at least twap_window / twap_interval samples (fully sampled window)
+    let min_samples = (market.twap_window / market.twap_interval).max(1) as u32;
+    require!(market.twap_samples_count >= min_samples, DuelError::NoTwapSamples);
 
     let samples = market.twap_samples_count as u128;
 
