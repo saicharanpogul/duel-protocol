@@ -3,6 +3,7 @@ use anchor_lang::prelude::*;
 declare_id!("CgR6V1AxC7exDFNoh3Q5JP9aea9YuPqq283EwACUGpZE");
 
 pub mod constants;
+pub mod cpi;
 pub mod errors;
 pub mod events;
 pub mod instructions;
@@ -76,5 +77,12 @@ pub mod duel {
         min_sol_out: u64,
     ) -> Result<()> {
         instructions::sell_post_resolution::handler(ctx, side, token_amount, min_sol_out)
+    }
+
+    pub fn graduate_to_dex(
+        ctx: Context<GraduateToDex>,
+        side: u8,
+    ) -> Result<()> {
+        instructions::graduate_to_dex::handler(ctx, side)
     }
 }

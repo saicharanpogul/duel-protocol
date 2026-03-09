@@ -176,6 +176,8 @@ pub fn handler(
     market.final_twap_a = 0;
     market.final_twap_b = 0;
     market.protocol_fee_account = ctx.accounts.protocol_fee_account.key();
+    market.graduated_a = false;
+    market.graduated_b = false;
     market.bump = ctx.bumps.market;
 
     // Initialize Side A

@@ -49,6 +49,10 @@ pub struct Market {
     pub final_twap_b: u64,
     /// Protocol fee recipient
     pub protocol_fee_account: Pubkey,
+    /// Whether Side A has graduated to DEX
+    pub graduated_a: bool,
+    /// Whether Side B has graduated to DEX
+    pub graduated_b: bool,
     /// PDA bump
     pub bump: u8,
 }
@@ -74,6 +78,8 @@ impl Market {
         + 8   // final_twap_a
         + 8   // final_twap_b
         + 32  // protocol_fee_account
+        + 1   // graduated_a
+        + 1   // graduated_b
         + 1   // bump
-        + 64; // padding
+        + 62; // padding (reduced from 64)
 }
