@@ -1,0 +1,1308 @@
+{
+  "address": "CgR6V1AxC7exDFNoh3Q5JP9aea9YuPqq283EwACUGpZE",
+  "metadata": {
+    "name": "duel",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Duel Protocol: binary outcome markets with TWAP-resolved bonding curves"
+  },
+  "instructions": [
+    {
+      "name": "buy_tokens",
+      "discriminator": [
+        189,
+        21,
+        230,
+        133,
+        247,
+        2,
+        110,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "side_account",
+          "writable": true
+        },
+        {
+          "name": "token_vault",
+          "docs": [
+            "Token vault for the selected side"
+          ],
+          "writable": true
+        },
+        {
+          "name": "buyer_token_account",
+          "docs": [
+            "Buyer's token account for the selected side"
+          ],
+          "writable": true
+        },
+        {
+          "name": "sol_vault",
+          "docs": [
+            "SOL vault for the selected side"
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "side",
+          "type": "u8"
+        },
+        {
+          "name": "sol_amount",
+          "type": "u64"
+        },
+        {
+          "name": "min_tokens_out",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "graduate_to_dex",
+      "discriminator": [
+        83,
+        110,
+        46,
+        201,
+        206,
+        12,
+        95,
+        44
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Market creator or permissionless resolver"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "side_account",
+          "docs": [
+            "Side account being graduated"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_mint",
+          "docs": [
+            "Token mint for this side"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_vault",
+          "docs": [
+            "Token vault for this side (source of tokens to seed pool)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "sol_vault",
+          "docs": [
+            "SOL vault for this side (source of SOL to seed pool)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "wsol_mint",
+          "docs": [
+            "WSOL mint (So11111111111111111111111111111111111111112)"
+          ]
+        },
+        {
+          "name": "pool",
+          "docs": [
+            "Meteora pool account (PDA created by Meteora)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "pool_authority",
+          "docs": [
+            "Pool authority (PDA derived by Meteora)"
+          ]
+        },
+        {
+          "name": "pool_token_a_vault",
+          "docs": [
+            "Pool's token A vault"
+          ],
+          "writable": true
+        },
+        {
+          "name": "pool_token_b_vault",
+          "docs": [
+            "Pool's token B vault (WSOL)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "lp_mint",
+          "docs": [
+            "LP token mint"
+          ],
+          "writable": true
+        },
+        {
+          "name": "creator_token_a",
+          "docs": [
+            "Market PDA's token account for seeding the pool (token A)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "creator_token_b",
+          "docs": [
+            "Market PDA's WSOL account for seeding the pool (token B)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "creator_lp_token",
+          "docs": [
+            "Market PDA's LP token account to receive LP tokens"
+          ],
+          "writable": true
+        },
+        {
+          "name": "meteora_program",
+          "docs": [
+            "Meteora DAMM v2 program"
+          ]
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "side",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "initialize_market",
+      "discriminator": [
+        35,
+        35,
+        189,
+        193,
+        155,
+        48,
+        170,
+        203
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "market_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "side_a",
+          "writable": true
+        },
+        {
+          "name": "side_b",
+          "writable": true
+        },
+        {
+          "name": "token_mint_a",
+          "writable": true
+        },
+        {
+          "name": "token_mint_b",
+          "writable": true
+        },
+        {
+          "name": "token_vault_a",
+          "writable": true
+        },
+        {
+          "name": "token_vault_b",
+          "writable": true
+        },
+        {
+          "name": "sol_vault_a",
+          "docs": [
+            "SOL vault for Side A (program-owned PDA)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "sol_vault_b",
+          "docs": [
+            "SOL vault for Side B (program-owned PDA)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "protocol_fee_account",
+          "docs": [
+            "Protocol fee recipient"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "market_id",
+          "type": "u64"
+        },
+        {
+          "name": "deadline",
+          "type": "i64"
+        },
+        {
+          "name": "twap_window",
+          "type": "u64"
+        },
+        {
+          "name": "twap_interval",
+          "type": "u64"
+        },
+        {
+          "name": "battle_tax_bps",
+          "type": "u16"
+        },
+        {
+          "name": "protocol_fee_bps",
+          "type": "u16"
+        },
+        {
+          "name": "sell_penalty_max_bps",
+          "type": "u16"
+        },
+        {
+          "name": "protection_activation_offset",
+          "type": "u64"
+        },
+        {
+          "name": "curve_params",
+          "type": {
+            "defined": {
+              "name": "CurveParams"
+            }
+          }
+        },
+        {
+          "name": "total_supply_per_side",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "record_twap_sample",
+      "discriminator": [
+        31,
+        68,
+        141,
+        56,
+        246,
+        237,
+        63,
+        5
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "docs": [
+            "Anyone can crank (permissionless)"
+          ],
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "side_a",
+          "writable": true
+        },
+        {
+          "name": "side_b",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "resolve_market",
+      "discriminator": [
+        155,
+        23,
+        80,
+        173,
+        46,
+        74,
+        23,
+        239
+      ],
+      "accounts": [
+        {
+          "name": "resolver",
+          "docs": [
+            "Anyone can resolve (permissionless)"
+          ],
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "side_a",
+          "writable": true
+        },
+        {
+          "name": "side_b",
+          "writable": true
+        },
+        {
+          "name": "sol_vault_a",
+          "docs": [
+            "SOL vault for Side A"
+          ],
+          "writable": true
+        },
+        {
+          "name": "sol_vault_b",
+          "docs": [
+            "SOL vault for Side B"
+          ],
+          "writable": true
+        },
+        {
+          "name": "protocol_fee_account",
+          "docs": [
+            "Protocol fee recipient"
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "sell_post_resolution",
+      "discriminator": [
+        243,
+        79,
+        134,
+        107,
+        9,
+        167,
+        154,
+        243
+      ],
+      "accounts": [
+        {
+          "name": "seller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market"
+        },
+        {
+          "name": "side_account",
+          "writable": true
+        },
+        {
+          "name": "token_vault",
+          "docs": [
+            "Token vault for the selected side"
+          ],
+          "writable": true
+        },
+        {
+          "name": "seller_token_account",
+          "docs": [
+            "Seller's token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "sol_vault",
+          "docs": [
+            "SOL vault for the selected side"
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "side",
+          "type": "u8"
+        },
+        {
+          "name": "token_amount",
+          "type": "u64"
+        },
+        {
+          "name": "min_sol_out",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "sell_tokens",
+      "discriminator": [
+        114,
+        242,
+        25,
+        12,
+        62,
+        126,
+        92,
+        2
+      ],
+      "accounts": [
+        {
+          "name": "seller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "side_account",
+          "writable": true
+        },
+        {
+          "name": "token_vault",
+          "docs": [
+            "Token vault for the selected side"
+          ],
+          "writable": true
+        },
+        {
+          "name": "seller_token_account",
+          "docs": [
+            "Seller's token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "sol_vault",
+          "docs": [
+            "SOL vault for the selected side"
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "side",
+          "type": "u8"
+        },
+        {
+          "name": "token_amount",
+          "type": "u64"
+        },
+        {
+          "name": "min_sol_out",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Market",
+      "discriminator": [
+        219,
+        190,
+        213,
+        55,
+        0,
+        227,
+        198,
+        154
+      ]
+    },
+    {
+      "name": "Side",
+      "discriminator": [
+        152,
+        5,
+        114,
+        60,
+        29,
+        214,
+        47,
+        183
+      ]
+    },
+    {
+      "name": "SolVault",
+      "discriminator": [
+        21,
+        132,
+        230,
+        103,
+        19,
+        209,
+        129,
+        248
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "MarketCreated",
+      "discriminator": [
+        88,
+        184,
+        130,
+        231,
+        226,
+        84,
+        6,
+        58
+      ]
+    },
+    {
+      "name": "MarketResolved",
+      "discriminator": [
+        89,
+        67,
+        230,
+        95,
+        143,
+        106,
+        199,
+        202
+      ]
+    },
+    {
+      "name": "TokensBought",
+      "discriminator": [
+        151,
+        148,
+        173,
+        226,
+        128,
+        30,
+        249,
+        190
+      ]
+    },
+    {
+      "name": "TokensGraduated",
+      "discriminator": [
+        5,
+        121,
+        149,
+        210,
+        62,
+        223,
+        221,
+        24
+      ]
+    },
+    {
+      "name": "TokensSold",
+      "discriminator": [
+        217,
+        83,
+        68,
+        137,
+        134,
+        225,
+        94,
+        45
+      ]
+    },
+    {
+      "name": "TwapSampled",
+      "discriminator": [
+        42,
+        84,
+        142,
+        34,
+        93,
+        69,
+        65,
+        147
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "MarketExpired",
+      "msg": "Market has passed its deadline"
+    },
+    {
+      "code": 6001,
+      "name": "MarketNotExpired",
+      "msg": "Market has not reached its deadline yet"
+    },
+    {
+      "code": 6002,
+      "name": "MarketAlreadyResolved",
+      "msg": "Market is already resolved"
+    },
+    {
+      "code": 6003,
+      "name": "MarketNotResolved",
+      "msg": "Market is not resolved yet"
+    },
+    {
+      "code": 6004,
+      "name": "NotInTwapWindow",
+      "msg": "Not within TWAP observation window"
+    },
+    {
+      "code": 6005,
+      "name": "TwapSampleTooEarly",
+      "msg": "TWAP sample too early, interval not elapsed"
+    },
+    {
+      "code": 6006,
+      "name": "NoTwapSamples",
+      "msg": "No TWAP samples recorded"
+    },
+    {
+      "code": 6007,
+      "name": "InsufficientSolAmount",
+      "msg": "Insufficient SOL amount"
+    },
+    {
+      "code": 6008,
+      "name": "InsufficientTokenBalance",
+      "msg": "Insufficient token balance"
+    },
+    {
+      "code": 6009,
+      "name": "InsufficientReserve",
+      "msg": "Insufficient reserve for withdrawal"
+    },
+    {
+      "code": 6010,
+      "name": "SlippageExceeded",
+      "msg": "Slippage tolerance exceeded"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidSide",
+      "msg": "Invalid side index"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidCurveParams",
+      "msg": "Invalid curve parameters"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidMarketConfig",
+      "msg": "Invalid market configuration"
+    },
+    {
+      "code": 6014,
+      "name": "MathOverflow",
+      "msg": "Math overflow"
+    },
+    {
+      "code": 6015,
+      "name": "AlreadyGraduated",
+      "msg": "Side already graduated to DEX"
+    },
+    {
+      "code": 6016,
+      "name": "InsufficientReserveForGraduation",
+      "msg": "Insufficient reserve for DEX graduation"
+    }
+  ],
+  "types": [
+    {
+      "name": "CurveParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "a",
+            "docs": [
+              "Steepness coefficient (scaled by 10^9)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "n",
+            "docs": [
+              "Exponent (1 = linear, 2 = quadratic, 3 = cubic)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "b",
+            "docs": [
+              "Base price in lamports"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Market",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "Market creator"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "market_id",
+            "docs": [
+              "Unique ID per creator"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "side_a",
+            "docs": [
+              "Side A PDA"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "side_b",
+            "docs": [
+              "Side B PDA"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "deadline",
+            "docs": [
+              "Unix timestamp deadline"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "twap_window",
+            "docs": [
+              "TWAP observation window in seconds"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "twap_interval",
+            "docs": [
+              "TWAP sampling interval in seconds"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "battle_tax_bps",
+            "docs": [
+              "Battle tax in basis points (0-10000)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "protocol_fee_bps",
+            "docs": [
+              "Protocol fee in basis points (0-500)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "sell_penalty_max_bps",
+            "docs": [
+              "Max sell penalty in basis points (0-3000)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "protection_activation_offset",
+            "docs": [
+              "Seconds before deadline when sell penalty activates"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "curve_params",
+            "docs": [
+              "Bonding curve parameters"
+            ],
+            "type": {
+              "defined": {
+                "name": "CurveParams"
+              }
+            }
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Current market status"
+            ],
+            "type": {
+              "defined": {
+                "name": "MarketStatus"
+              }
+            }
+          },
+          {
+            "name": "twap_samples_count",
+            "docs": [
+              "Number of TWAP samples recorded"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "last_sample_ts",
+            "docs": [
+              "Timestamp of last TWAP sample"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "winner",
+            "docs": [
+              "Winner side index (0 = A, 1 = B), None if not resolved"
+            ],
+            "type": {
+              "option": "u8"
+            }
+          },
+          {
+            "name": "final_twap_a",
+            "docs": [
+              "Final TWAP for side A (lamports, price * 10^9 for precision)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "final_twap_b",
+            "docs": [
+              "Final TWAP for side B"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "protocol_fee_account",
+            "docs": [
+              "Protocol fee recipient"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "graduated_a",
+            "docs": [
+              "Whether Side A has graduated to DEX"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "graduated_b",
+            "docs": [
+              "Whether Side B has graduated to DEX"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "deadline",
+            "type": "i64"
+          },
+          {
+            "name": "battle_tax_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketResolved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner",
+            "type": "u8"
+          },
+          {
+            "name": "final_twap_a",
+            "type": "u64"
+          },
+          {
+            "name": "final_twap_b",
+            "type": "u64"
+          },
+          {
+            "name": "transfer_amount",
+            "type": "u64"
+          },
+          {
+            "name": "protocol_fee",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Active"
+          },
+          {
+            "name": "TwapObservation"
+          },
+          {
+            "name": "Resolved"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Side",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "docs": [
+              "Parent market PDA"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "side_index",
+            "docs": [
+              "Side index (0 = A, 1 = B)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "token_mint",
+            "docs": [
+              "Token mint for this side"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "token_reserve_vault",
+            "docs": [
+              "Vault holding unsold/returned tokens"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "sol_reserve_vault",
+            "docs": [
+              "Vault holding SOL from buys"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "total_supply",
+            "docs": [
+              "Fixed total supply (set at creation)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "circulating_supply",
+            "docs": [
+              "Tokens currently held by participants"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "peak_reserve",
+            "docs": [
+              "Historical max SOL reserve (for sell penalty calc)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "twap_accumulator",
+            "docs": [
+              "Sum of price samples for TWAP (u128 to prevent overflow)"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SolVault",
+      "docs": [
+        "Zero-data account owned by the program to hold SOL reserves.",
+        "Using a program-owned account allows the program to debit lamports."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": []
+      }
+    },
+    {
+      "name": "TokensBought",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "side",
+            "type": "u8"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "sol_amount",
+            "type": "u64"
+          },
+          {
+            "name": "tokens_received",
+            "type": "u64"
+          },
+          {
+            "name": "new_price",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokensGraduated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "side",
+            "type": "u8"
+          },
+          {
+            "name": "dex_pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "sol_seeded",
+            "type": "u64"
+          },
+          {
+            "name": "tokens_seeded",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokensSold",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "side",
+            "type": "u8"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_amount",
+            "type": "u64"
+          },
+          {
+            "name": "sol_received",
+            "type": "u64"
+          },
+          {
+            "name": "penalty_applied",
+            "type": "u64"
+          },
+          {
+            "name": "new_price",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TwapSampled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_a",
+            "type": "u64"
+          },
+          {
+            "name": "price_b",
+            "type": "u64"
+          },
+          {
+            "name": "sample_count",
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}
