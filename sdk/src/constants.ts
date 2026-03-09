@@ -18,8 +18,8 @@ export const WSOL_MINT = new PublicKey(
 /** BPS denominator (10_000) */
 export const BPS_DENOMINATOR = 10_000;
 
-/** Maximum battle tax BPS */
-export const MAX_BATTLE_TAX_BPS = 8_000;
+/** Maximum battle tax BPS (100%) */
+export const MAX_BATTLE_TAX_BPS = 10_000;
 
 /** Maximum protocol fee BPS */
 export const MAX_PROTOCOL_FEE_BPS = 500;
