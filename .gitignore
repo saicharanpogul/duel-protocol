@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+target/
+
+# Anchor
+.anchor/
+test-ledger/
+
+# Build artifacts
+dist/
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+*.pem
+keypair.json
+
+# Logs
+*.log
