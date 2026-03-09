@@ -288,6 +288,35 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
       console.log(`    SOL vault balance: ${svAInfo!.lamports / LAMPORTS_PER_SOL} SOL`);
       console.log(`    Token vault balance: ${(await getAccount(provider.connection, pdas.tvA)).amount.toString()}`);
 
+      // Pre-create ATAs for market PDA (payer_token_a and payer_token_b)
+      console.log(`    Creating payer ATAs...`);
+      const preIxs: anchor.web3.TransactionInstruction[] = [];
+      try { await getAccount(provider.connection, payerTokenA); } catch {
+        preIxs.push(createAssociatedTokenAccountInstruction(creator.publicKey, payerTokenA, pdas.market, pdas.mintA));
+      }
+      try { await getAccount(provider.connection, payerTokenB); } catch {
+        preIxs.push(createAssociatedTokenAccountInstruction(creator.publicKey, payerTokenB, pdas.market, WSOL_MINT));
+      }
+      if (preIxs.length > 0) {
+        await provider.sendAndConfirm(new anchor.web3.Transaction().add(...preIxs));
+        console.log(`    ✅ Created ${preIxs.length} payer ATAs`);
+      }
+
+      // Fund the WSOL ATA: authority sends SOL → payer_token_b, then SyncNative
+      // The authority fronts the SOL; after graduation, they reclaim it from the sol_vault.
+      const rentForAta = await provider.connection.getMinimumBalanceForRentExemption(165); // token account size
+      const solToSeed = svAInfo!.lamports - rentForAta; // match sol_vault's available SOL
+      console.log(`    Funding WSOL ATA with ${solToSeed / LAMPORTS_PER_SOL} SOL...`);
+
+      // Use @solana/spl-token's createSyncNativeInstruction
+      const { createSyncNativeInstruction } = await import("@solana/spl-token");
+      const fundTx = new anchor.web3.Transaction().add(
+        SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: payerTokenB, lamports: solToSeed }),
+        createSyncNativeInstruction(payerTokenB),
+      );
+      await provider.sendAndConfirm(fundTx);
+      console.log(`    ✅ WSOL ATA funded`);
+
       try {
         const tx = await program.methods
           .graduateToDex(0) // side 0 = A

@@ -13,7 +13,7 @@ pub const MIN_GRADUATION_RESERVE: u64 = 100_000_000; // 0.1 SOL
 
 #[derive(Accounts)]
 pub struct GraduateToDex<'info> {
-    /// Market creator or permissionless resolver
+    /// Market creator or permissionless resolver — provides SOL for WSOL wrapping
     #[account(mut)]
     pub authority: Signer<'info>,
 
@@ -44,7 +44,8 @@ pub struct GraduateToDex<'info> {
     )]
     pub token_vault: Account<'info, TokenAccount>,
 
-    /// SOL vault for this side (source of SOL to seed pool)
+    /// SOL vault — checked for minimum reserve, NOT drained here.
+    /// Authority fronts the SOL and gets reimbursed after graduation.
     #[account(
         mut,
         constraint = sol_vault.key() == side_account.sol_reserve_vault @ DuelError::InvalidSide,
@@ -52,101 +53,84 @@ pub struct GraduateToDex<'info> {
     pub sol_vault: Account<'info, SolVault>,
 
     // ---- Meteora DAMM v2 accounts ----
-    // All validated by the Meteora program itself during CPI.
 
-    /// WSOL mint (So11111111111111111111111111111111111111112)
+    /// WSOL mint
     /// CHECK: Validated by Meteora program
     pub wsol_mint: UncheckedAccount<'info>,
 
-    /// Meteora pool account (PDA created/validated by Meteora)
     /// CHECK: Created by Meteora CPI
     #[account(mut)]
     pub pool: UncheckedAccount<'info>,
 
-    /// Pool LP token mint (PDA derived by Meteora)
     /// CHECK: Created by Meteora CPI
     #[account(mut)]
     pub lp_mint: UncheckedAccount<'info>,
 
-    /// Dynamic vault for token A
     /// CHECK: Created/validated by Meteora vault program
     #[account(mut)]
     pub a_vault: UncheckedAccount<'info>,
 
-    /// Dynamic vault for token B (WSOL)
     /// CHECK: Created/validated by Meteora vault program
     #[account(mut)]
     pub b_vault: UncheckedAccount<'info>,
 
-    /// Token vault account of vault A
     /// CHECK: Validated by Meteora program
     #[account(mut)]
     pub a_token_vault: UncheckedAccount<'info>,
 
-    /// Token vault account of vault B
     /// CHECK: Validated by Meteora program
     #[account(mut)]
     pub b_token_vault: UncheckedAccount<'info>,
 
-    /// LP token mint of vault A
     /// CHECK: Validated by Meteora program
     #[account(mut)]
     pub a_vault_lp_mint: UncheckedAccount<'info>,
 
-    /// LP token mint of vault B
     /// CHECK: Validated by Meteora program
     #[account(mut)]
     pub b_vault_lp_mint: UncheckedAccount<'info>,
 
-    /// LP token account of vault A (pool holds vault LP to track deposit)
     /// CHECK: Validated by Meteora program
     #[account(mut)]
     pub a_vault_lp: UncheckedAccount<'info>,
 
-    /// LP token account of vault B (pool holds vault LP to track deposit)
     /// CHECK: Validated by Meteora program
     #[account(mut)]
     pub b_vault_lp: UncheckedAccount<'info>,
 
-    /// Market PDA's token A account for seeding the pool
+    /// Market PDA's token A account (must be pre-created and funded)
     /// CHECK: ATA for market PDA
     #[account(mut)]
     pub payer_token_a: UncheckedAccount<'info>,
 
-    /// Market PDA's WSOL account for seeding the pool
+    /// Market PDA's WSOL account (must be pre-created and funded with wrapped SOL)
     /// CHECK: ATA for market PDA
     #[account(mut)]
     pub payer_token_b: UncheckedAccount<'info>,
 
-    /// Market PDA's LP token account to receive LP tokens
-    /// CHECK: ATA for market PDA
+    /// Market PDA's LP token account
+    /// CHECK: Handled by Meteora
     #[account(mut)]
     pub payer_pool_lp: UncheckedAccount<'info>,
 
-    /// Protocol fee token account for token A
     /// CHECK: Validated by Meteora program
     #[account(mut)]
     pub protocol_token_a_fee: UncheckedAccount<'info>,
 
-    /// Protocol fee token account for token B
     /// CHECK: Validated by Meteora program
     #[account(mut)]
     pub protocol_token_b_fee: UncheckedAccount<'info>,
 
-    /// LP mint metadata (Metaplex)
     /// CHECK: Created by Meteora program
     #[account(mut)]
     pub mint_metadata: UncheckedAccount<'info>,
 
-    /// Metaplex Token Metadata program
     /// CHECK: Validated by Meteora program
     pub metadata_program: UncheckedAccount<'info>,
 
-    /// Meteora Vault program
     /// CHECK: Validated by Meteora program
     pub vault_program: UncheckedAccount<'info>,
 
-    /// Meteora DAMM v2 program
     /// CHECK: Validated against known program ID
     #[account(
         constraint = meteora_program.key() == meteora_damm::METEORA_DAMM_V2_PROGRAM_ID @ DuelError::InvalidMarketConfig,
@@ -169,7 +153,7 @@ pub fn handler(ctx: Context<GraduateToDex>, side: u8) -> Result<()> {
     let already_graduated = if side == 0 { market.graduated_a } else { market.graduated_b };
     require!(!already_graduated, DuelError::AlreadyGraduated);
 
-    // Check minimum reserve
+    // Check minimum reserve — sol_vault must have enough to justify graduation
     let sol_balance = ctx.accounts.sol_vault.to_account_info().lamports();
     let rent_exempt = Rent::get()?.minimum_balance(SolVault::SIZE);
     let available_sol = sol_balance.saturating_sub(rent_exempt);
@@ -191,12 +175,8 @@ pub fn handler(ctx: Context<GraduateToDex>, side: u8) -> Result<()> {
         &[bump],
     ]];
 
-    // Transfer SOL from SolVault to payer_token_b (WSOL account)
-    let sol_to_seed = available_sol;
-    **ctx.accounts.sol_vault.to_account_info().try_borrow_mut_lamports()? -= sol_to_seed;
-    **ctx.accounts.payer_token_b.to_account_info().try_borrow_mut_lamports()? += sol_to_seed;
-
-    // Transfer tokens from token vault to payer_token_a using market PDA as signer
+    // ─── Transfer tokens from token vault to payer_token_a (market PDA signed) ───
+    // payer_token_a must already be created (ATA of market PDA for token mint)
     anchor_spl::token::transfer(
         CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
@@ -210,33 +190,37 @@ pub fn handler(ctx: Context<GraduateToDex>, side: u8) -> Result<()> {
         tokens_available,
     )?;
 
+    // NOTE: payer_token_b (WSOL) must be pre-funded by the caller.
+    // The authority wraps SOL into the WSOL ATA before this instruction.
+    // After graduation, the authority closes the sol_vault and reclaims the SOL.
+
     // Build Meteora CPI account metas (25 accounts, matching IDL order)
     let account_metas = vec![
-        AccountMeta::new(ctx.accounts.pool.key(), false),                    // 0: pool
-        AccountMeta::new(ctx.accounts.lp_mint.key(), false),                 // 1: lp_mint
-        AccountMeta::new_readonly(ctx.accounts.token_mint.key(), false),     // 2: token_a_mint
-        AccountMeta::new_readonly(ctx.accounts.wsol_mint.key(), false),      // 3: token_b_mint
-        AccountMeta::new(ctx.accounts.a_vault.key(), false),                 // 4: a_vault
-        AccountMeta::new(ctx.accounts.b_vault.key(), false),                 // 5: b_vault
-        AccountMeta::new(ctx.accounts.a_token_vault.key(), false),           // 6: a_token_vault
-        AccountMeta::new(ctx.accounts.b_token_vault.key(), false),           // 7: b_token_vault
-        AccountMeta::new(ctx.accounts.a_vault_lp_mint.key(), false),         // 8: a_vault_lp_mint
-        AccountMeta::new(ctx.accounts.b_vault_lp_mint.key(), false),         // 9: b_vault_lp_mint
-        AccountMeta::new(ctx.accounts.a_vault_lp.key(), false),              // 10: a_vault_lp
-        AccountMeta::new(ctx.accounts.b_vault_lp.key(), false),              // 11: b_vault_lp
-        AccountMeta::new(ctx.accounts.payer_token_a.key(), false),           // 12: payer_token_a
-        AccountMeta::new(ctx.accounts.payer_token_b.key(), false),           // 13: payer_token_b
-        AccountMeta::new(ctx.accounts.payer_pool_lp.key(), false),           // 14: payer_pool_lp
-        AccountMeta::new(ctx.accounts.protocol_token_a_fee.key(), false),    // 15: protocol_token_a_fee
-        AccountMeta::new(ctx.accounts.protocol_token_b_fee.key(), false),    // 16: protocol_token_b_fee
-        AccountMeta::new(market_key, true),                                   // 17: payer (market PDA = signer)
-        AccountMeta::new_readonly(ctx.accounts.rent.key(), false),           // 18: rent
-        AccountMeta::new(ctx.accounts.mint_metadata.key(), false),           // 19: mint_metadata
-        AccountMeta::new_readonly(ctx.accounts.metadata_program.key(), false), // 20: metadata_program
-        AccountMeta::new_readonly(ctx.accounts.vault_program.key(), false),  // 21: vault_program
-        AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),  // 22: token_program
-        AccountMeta::new_readonly(ctx.accounts.associated_token_program.key(), false), // 23: ata_program
-        AccountMeta::new_readonly(ctx.accounts.system_program.key(), false), // 24: system_program
+        AccountMeta::new(ctx.accounts.pool.key(), false),
+        AccountMeta::new(ctx.accounts.lp_mint.key(), false),
+        AccountMeta::new_readonly(ctx.accounts.token_mint.key(), false),
+        AccountMeta::new_readonly(ctx.accounts.wsol_mint.key(), false),
+        AccountMeta::new(ctx.accounts.a_vault.key(), false),
+        AccountMeta::new(ctx.accounts.b_vault.key(), false),
+        AccountMeta::new(ctx.accounts.a_token_vault.key(), false),
+        AccountMeta::new(ctx.accounts.b_token_vault.key(), false),
+        AccountMeta::new(ctx.accounts.a_vault_lp_mint.key(), false),
+        AccountMeta::new(ctx.accounts.b_vault_lp_mint.key(), false),
+        AccountMeta::new(ctx.accounts.a_vault_lp.key(), false),
+        AccountMeta::new(ctx.accounts.b_vault_lp.key(), false),
+        AccountMeta::new(ctx.accounts.payer_token_a.key(), false),
+        AccountMeta::new(ctx.accounts.payer_token_b.key(), false),
+        AccountMeta::new(ctx.accounts.payer_pool_lp.key(), false),
+        AccountMeta::new(ctx.accounts.protocol_token_a_fee.key(), false),
+        AccountMeta::new(ctx.accounts.protocol_token_b_fee.key(), false),
+        AccountMeta::new(market_key, true), // payer (market PDA = signer)
+        AccountMeta::new_readonly(ctx.accounts.rent.key(), false),
+        AccountMeta::new(ctx.accounts.mint_metadata.key(), false),
+        AccountMeta::new_readonly(ctx.accounts.metadata_program.key(), false),
+        AccountMeta::new_readonly(ctx.accounts.vault_program.key(), false),
+        AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),
+        AccountMeta::new_readonly(ctx.accounts.associated_token_program.key(), false),
+        AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
     ];
 
     // Collect all account infos for the CPI
@@ -275,7 +259,7 @@ pub fn handler(ctx: Context<GraduateToDex>, side: u8) -> Result<()> {
         account_metas,
         account_infos,
         tokens_available,
-        sol_to_seed,
+        available_sol,
         params,
         signer_seeds,
     )?;
@@ -292,7 +276,7 @@ pub fn handler(ctx: Context<GraduateToDex>, side: u8) -> Result<()> {
         market: market.key(),
         side,
         dex_pool: ctx.accounts.pool.key(),
-        sol_seeded: sol_to_seed,
+        sol_seeded: available_sol,
         tokens_seeded: tokens_available,
     });
 
