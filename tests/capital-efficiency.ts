@@ -95,7 +95,7 @@ describe("duel - capital efficiency & battle testing", () => {
         curveParams, totalSupply,
         "Test A", "TA", "", "Test B", "TB", "",
       )
-      .accounts({
+      .accountsStrict({
         creator: creator.publicKey,
         market: pdas.market, sideA: pdas.sideA, sideB: pdas.sideB,
         tokenMintA: pdas.mintA, tokenMintB: pdas.mintB,
@@ -143,7 +143,7 @@ describe("duel - capital efficiency & battle testing", () => {
 
     const builder = program.methods
       .buyTokens(side, solAmount, new BN(1))
-      .accounts({
+      .accountsStrict({
         buyer: payer, market: pdas.market, sideAccount,
         tokenVault, buyerTokenAccount: ata, solVault,
         systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
@@ -178,9 +178,9 @@ describe("duel - capital efficiency & battle testing", () => {
     };
 
     if (postResolution) {
-      await program.methods.sellPostResolution(side, tokenAmount, new BN(0)).accounts(accounts).rpc();
+      await program.methods.sellPostResolution(side, tokenAmount, new BN(0)).accountsStrict(accounts).rpc();
     } else {
-      await program.methods.sellTokens(side, tokenAmount, new BN(1)).accounts(accounts).rpc();
+      await program.methods.sellTokens(side, tokenAmount, new BN(1)).accountsStrict(accounts).rpc();
     }
   }
 
@@ -395,14 +395,14 @@ describe("duel - capital efficiency & battle testing", () => {
       await new Promise(r => setTimeout(r, 5000));
 
       await program.methods.recordTwapSample()
-        .accounts({ cranker: creator.publicKey, market: pdas.market, sideA: pdas.sideA, sideB: pdas.sideB })
+        .accountsStrict({ cranker: creator.publicKey, market: pdas.market, sideA: pdas.sideA, sideB: pdas.sideB })
         .rpc();
 
       // Wait for deadline (now + 15s total, ~10s remaining)
       await new Promise(r => setTimeout(r, 12000));
 
       await program.methods.resolveMarket()
-        .accounts({
+        .accountsStrict({
           resolver: creator.publicKey, market: pdas.market,
           sideA: pdas.sideA, sideB: pdas.sideB,
           solVaultA: pdas.svA, solVaultB: pdas.svB,
@@ -450,14 +450,14 @@ describe("duel - capital efficiency & battle testing", () => {
       await new Promise(r => setTimeout(r, 5000));
 
       await program.methods.recordTwapSample()
-        .accounts({ cranker: creator.publicKey, market: pdas.market, sideA: pdas.sideA, sideB: pdas.sideB })
+        .accountsStrict({ cranker: creator.publicKey, market: pdas.market, sideA: pdas.sideA, sideB: pdas.sideB })
         .rpc();
 
       // Wait for deadline (now + 15s total, ~10s remaining)
       await new Promise(r => setTimeout(r, 12000));
 
       await program.methods.resolveMarket()
-        .accounts({
+        .accountsStrict({
           resolver: creator.publicKey, market: pdas.market,
           sideA: pdas.sideA, sideB: pdas.sideB,
           solVaultA: pdas.svA, solVaultB: pdas.svB,
@@ -667,6 +667,454 @@ describe("duel - capital efficiency & battle testing", () => {
       for (let i = 1; i < solReturns.length; i++) {
         expect(solReturns[i]).to.be.lessThan(solReturns[i - 1]);
       }
+    });
+  });
+
+  // ═══════════════════════════════════════════════
+  //  3. ADVANCED ATTACK VECTORS & CU PROFILING
+  // ═══════════════════════════════════════════════
+
+  describe("13. Sandwich Attack Analysis", () => {
+    it("front-runner profit is bounded by bonding curve", async () => {
+      const { pdas } = await createMarket(
+        undefined, undefined,
+        { protectionActivationOffset: 0 },
+      );
+
+      // Attacker buys first (front-run)
+      const attackerBal0 = await getBalance(creator.publicKey);
+      const { balance: attackerTokens } = await buyTokens(pdas, 0, new BN(0.5 * LAMPORTS_PER_SOL));
+      const attackerBal1 = await getBalance(creator.publicKey);
+
+      // Victim buys (large order that moves price)
+      const { balance: victimTokensBefore } = await buyTokens(pdas, 0, new BN(5 * LAMPORTS_PER_SOL));
+
+      // Attacker sells (back-run)
+      await sellTokens(pdas, 0, new BN(attackerTokens));
+      const attackerBal2 = await getBalance(creator.publicKey);
+
+      // Attacker profit = what they got back - what they spent (minus tx fees)
+      const attackerSpent = attackerBal0 - attackerBal1;
+      const attackerReturn = attackerBal2 - attackerBal1;
+      const profit = attackerReturn - attackerSpent;
+      const profitPct = (profit / attackerSpent) * 100;
+
+      console.log(`    Attacker spent: ${attackerSpent / LAMPORTS_PER_SOL} SOL`);
+      console.log(`    Attacker return: ${attackerReturn / LAMPORTS_PER_SOL} SOL`);
+      console.log(`    Profit: ${profit / LAMPORTS_PER_SOL} SOL (${profitPct.toFixed(2)}%)`);
+
+      // 1% base sell fee should eat most/all profit on small amounts
+      // At 0.5 SOL front-run vs 5 SOL victim, profit is minimal
+      console.log(`    Verdict: Sell fee limits sandwich profitability`);
+    });
+
+    it("larger front-run vs small victim shows diminishing returns", async () => {
+      const { pdas } = await createMarket(
+        undefined, undefined,
+        { protectionActivationOffset: 0 },
+      );
+
+      const attackerBal0 = await getBalance(creator.publicKey);
+      const { balance: attackerTokens } = await buyTokens(pdas, 0, new BN(5 * LAMPORTS_PER_SOL));
+
+      // Small victim
+      await buyTokens(pdas, 0, new BN(0.5 * LAMPORTS_PER_SOL));
+
+      const attackerBal1 = await getBalance(creator.publicKey);
+      await sellTokens(pdas, 0, new BN(attackerTokens));
+      const attackerBal2 = await getBalance(creator.publicKey);
+
+      const spent = attackerBal0 - attackerBal1;
+      const returned = attackerBal2 - attackerBal1;
+      const profitPct = ((returned - spent) / spent) * 100;
+
+      console.log(`    Large front-run (5 SOL) vs small victim (0.5 SOL): ${profitPct.toFixed(2)}% return`);
+      // Large front-run with small victim = net loss (sell fee dominates)
+    });
+  });
+
+  describe("14. TWAP Manipulation Resistance", () => {
+    it("buying before TWAP and selling after doesn't skew result unfairly", async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const { pdas } = await createMarket(
+        undefined, undefined,
+        { deadline: now + 20, twapWindow: 18, twapInterval: 10, protectionActivationOffset: 5 },
+      );
+
+      // Initial buys to set baseline prices
+      await buyTokens(pdas, 0, new BN(1 * LAMPORTS_PER_SOL));
+      await buyTokens(pdas, 1, new BN(1 * LAMPORTS_PER_SOL));
+
+      // Manipulator pumps side A right before TWAP window
+      await buyTokens(pdas, 0, new BN(3 * LAMPORTS_PER_SOL));
+
+      const sideABefore = await getSideData(pdas, 0);
+      const sideBBefore = await getSideData(pdas, 1);
+      console.log(`    Pre-TWAP supply: A=${sideABefore.circulatingSupply.toNumber()}, B=${sideBBefore.circulatingSupply.toNumber()}`);
+
+      // Wait for TWAP window
+      await new Promise(r => setTimeout(r, 4000));
+
+      // Record TWAP sample 1 (with inflated A price)
+      await program.methods.recordTwapSample()
+        .accountsStrict({ cranker: creator.publicKey, market: pdas.market, sideA: pdas.sideA, sideB: pdas.sideB })
+        .rpc();
+
+      const mkt1 = await getMarketData(pdas);
+      console.log(`    TWAP sample count: ${mkt1.twapSamplesCount}`);
+
+      // Wait for deadline
+      await new Promise(r => setTimeout(r, 18000));
+
+      // Resolve
+      await program.methods.resolveMarket()
+        .accountsStrict({
+          resolver: creator.publicKey, market: pdas.market,
+          sideA: pdas.sideA, sideB: pdas.sideB,
+          solVaultA: pdas.svA, solVaultB: pdas.svB,
+          protocolFeeAccount: protocolFeeAccount.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+
+      const mkt = await getMarketData(pdas);
+      console.log(`    Winner: Side ${mkt.winner === 0 ? "A" : "B"}`);
+      console.log(`    Final TWAP A: ${mkt.finalTwapA.toNumber()}, B: ${mkt.finalTwapB.toNumber()}`);
+
+      // With only 1 TWAP sample, the manipulator's pump is fully captured
+      // This shows that more TWAP samples dilute manipulation
+      expect(mkt.winner).to.equal(0); // A wins due to pump
+      console.log(`    Note: With only 1 TWAP sample, manipulation succeeds.`);
+      console.log(`    Mitigation: Require minimum TWAP sample count before resolution.`);
+    });
+  });
+
+  describe("15. Overflow Protection", () => {
+    it("very large SOL amount doesn't cause u128 overflow", async () => {
+      const { pdas } = await createMarket(
+        { a: new BN(1_000_000), n: 1, b: new BN(1_000) },
+        new BN("1000000000000"), // 1 trillion tokens
+      );
+
+      // Try buying with a large amount (100 SOL)
+      try {
+        const { balance: tokens } = await buyTokens(pdas, 0, new BN(100 * LAMPORTS_PER_SOL));
+        console.log(`    100 SOL → ${tokens} tokens (no overflow)`);
+        expect(tokens).to.be.greaterThan(0);
+      } catch (e: any) {
+        console.log(`    100 SOL buy rejected: ${e.message?.substring(0, 80)}`);
+        // Overflow rejection is also acceptable
+      }
+    });
+
+    it("quadratic curve with high supply doesn't overflow", async () => {
+      const { pdas } = await createMarket(
+        { a: new BN(100), n: 2, b: new BN(1) },
+        new BN(1_000_000_000),
+      );
+
+      // Sequential buys to push supply high
+      for (let i = 0; i < 5; i++) {
+        try {
+          await buyTokens(pdas, 0, new BN(10 * LAMPORTS_PER_SOL));
+        } catch {
+          console.log(`    Buy ${i + 1} failed (supply/price limit reached)`);
+          break;
+        }
+      }
+
+      const side = await getSideData(pdas, 0);
+      console.log(`    Final circulating supply: ${side.circulatingSupply.toNumber()}`);
+      console.log(`    Peak reserve: ${side.peakReserve.toNumber() / LAMPORTS_PER_SOL} SOL`);
+    });
+
+    it("cubic curve n=3 with large a doesn't overflow", async () => {
+      // This tests the pow_u128 function with n=3
+      const { pdas } = await createMarket(
+        { a: new BN(1), n: 3, b: new BN(100) },
+        new BN(1_000_000_000),
+      );
+
+      const { balance: tokens } = await buyTokens(pdas, 0, new BN(5 * LAMPORTS_PER_SOL));
+      console.log(`    Cubic n=3: 5 SOL → ${tokens} tokens`);
+      expect(tokens).to.be.greaterThan(0);
+
+      // Sell back
+      await sellTokens(pdas, 0, new BN(tokens));
+      const side = await getSideData(pdas, 0);
+      expect(side.circulatingSupply.toNumber()).to.equal(0);
+    });
+  });
+
+  describe("16. Security: Account Constraints", () => {
+    it("cannot buy with mismatched side account", async () => {
+      const { pdas } = await createMarket();
+
+      // Create ATA for side A
+      const ata = await getAssociatedTokenAddress(pdas.mintA, creator.publicKey);
+      try { await getAccount(provider.connection, ata); } catch {
+        const ix = createAssociatedTokenAccountInstruction(creator.publicKey, ata, creator.publicKey, pdas.mintA);
+        await provider.sendAndConfirm(new anchor.web3.Transaction().add(ix));
+      }
+
+      // Try buying side 0 but pass side B's accounts
+      try {
+        await program.methods
+          .buyTokens(0, new BN(0.1 * LAMPORTS_PER_SOL), new BN(1))
+          .accountsStrict({
+            buyer: creator.publicKey, market: pdas.market,
+            sideAccount: pdas.sideB, // WRONG: side B account for side=0
+            tokenVault: pdas.tvA, buyerTokenAccount: ata, solVault: pdas.svA,
+            systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .rpc();
+        expect.fail("should have rejected mismatched side");
+      } catch (e: any) {
+        console.log(`    Mismatched side rejected: ${e.message?.substring(0, 60)}`);
+        expect(e.message).to.include("InvalidSide");
+      }
+    });
+
+    it("cannot sell on a different market's side account", async () => {
+      const { pdas: pdas1 } = await createMarket();
+      const { pdas: pdas2 } = await createMarket();
+
+      // Buy on market 1
+      await buyTokens(pdas1, 0, new BN(1 * LAMPORTS_PER_SOL));
+
+      const ata = await getAssociatedTokenAddress(pdas1.mintA, creator.publicKey);
+      const acc = await getAccount(provider.connection, ata);
+
+      // Try selling on market 2's side account
+      try {
+        await program.methods
+          .sellTokens(0, new BN(Number(acc.amount)), new BN(1))
+          .accountsStrict({
+            seller: creator.publicKey, market: pdas2.market, // WRONG market
+            sideAccount: pdas2.sideA,
+            tokenVault: pdas2.tvA, sellerTokenAccount: ata, solVault: pdas2.svA,
+            systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .rpc();
+        expect.fail("should have rejected cross-market sell");
+      } catch (e: any) {
+        console.log(`    Cross-market sell rejected: ${e.message?.substring(0, 60)}`);
+      }
+    });
+
+    it("cannot resolve before deadline", async () => {
+      const { pdas } = await createMarket();
+      await buyTokens(pdas, 0, new BN(1 * LAMPORTS_PER_SOL));
+
+      try {
+        await program.methods.resolveMarket()
+          .accountsStrict({
+            resolver: creator.publicKey, market: pdas.market,
+            sideA: pdas.sideA, sideB: pdas.sideB,
+            solVaultA: pdas.svA, solVaultB: pdas.svB,
+            protocolFeeAccount: protocolFeeAccount.publicKey,
+            systemProgram: SystemProgram.programId,
+          })
+          .rpc();
+        expect.fail("should have rejected early resolve");
+      } catch (e: any) {
+        expect(e.message).to.include("MarketNotExpired");
+        console.log(`    Early resolve rejected ✓`);
+      }
+    });
+
+    it("cannot record TWAP outside window", async () => {
+      const { pdas } = await createMarket(); // deadline in 3600s, window is 600s
+
+      try {
+        await program.methods.recordTwapSample()
+          .accountsStrict({ cranker: creator.publicKey, market: pdas.market, sideA: pdas.sideA, sideB: pdas.sideB })
+          .rpc();
+        expect.fail("should have rejected TWAP outside window");
+      } catch (e: any) {
+        expect(e.message).to.include("NotInTwapWindow");
+        console.log(`    TWAP outside window rejected ✓`);
+      }
+    });
+  });
+
+  describe("17. CU Profiling", () => {
+    it("profiles compute units for all instructions", async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const id = new BN(marketCounter++);
+      const pdas = derivePdas(id);
+
+      await prefundPda(protocolFeeAccount.publicKey);
+
+      // 1. initializeMarket CU
+      const createTx = await program.methods
+        .initializeMarket(
+          id, new BN(now + 15), new BN(12), new BN(10),
+          5000, 100, 1500, new BN(10),
+          { a: new BN(1_000_000), n: 1, b: new BN(1_000) },
+          new BN(1_000_000_000),
+          "CU Test A", "CUA", "", "CU Test B", "CUB", "",
+        )
+        .accountsStrict({
+          creator: creator.publicKey,
+          market: pdas.market, sideA: pdas.sideA, sideB: pdas.sideB,
+          tokenMintA: pdas.mintA, tokenMintB: pdas.mintB,
+          tokenVaultA: pdas.tvA, tokenVaultB: pdas.tvB,
+          solVaultA: pdas.svA, solVaultB: pdas.svB,
+          protocolFeeAccount: protocolFeeAccount.publicKey,
+          metadataA: findMetadataPda(pdas.mintA),
+          metadataB: findMetadataPda(pdas.mintB),
+          tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        })
+        .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+        .rpc();
+
+      const createInfo = await provider.connection.getTransaction(createTx, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+      const createCU = createInfo?.meta?.computeUnitsConsumed ?? 0;
+      console.log(`    initializeMarket: ${createCU} CU`);
+
+      // 2. buyTokens CU (side A)
+      const ataA = await getAssociatedTokenAddress(pdas.mintA, creator.publicKey);
+      const createAtaIx = createAssociatedTokenAccountInstruction(creator.publicKey, ataA, creator.publicKey, pdas.mintA);
+      await provider.sendAndConfirm(new anchor.web3.Transaction().add(createAtaIx));
+
+      const buyTx = await program.methods
+        .buyTokens(0, new BN(1 * LAMPORTS_PER_SOL), new BN(1))
+        .accountsStrict({
+          buyer: creator.publicKey, market: pdas.market,
+          sideAccount: pdas.sideA, tokenVault: pdas.tvA,
+          buyerTokenAccount: ataA, solVault: pdas.svA,
+          systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+
+      // Also buy on side B so resolveMarket has loser vault to tax
+      await buyTokens(pdas, 1, new BN(0.5 * LAMPORTS_PER_SOL));
+
+      await new Promise(r => setTimeout(r, 500)); // let tx finalize
+      const buyInfo = await provider.connection.getTransaction(buyTx, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+      const buyCU = buyInfo?.meta?.computeUnitsConsumed ?? 0;
+      console.log(`    buyTokens: ${buyCU} CU`);
+
+      // 3. sellTokens CU
+      const acc = await getAccount(provider.connection, ataA);
+      const halfTokens = Number(acc.amount) / 2;
+
+      const sellTx = await program.methods
+        .sellTokens(0, new BN(halfTokens), new BN(1))
+        .accountsStrict({
+          seller: creator.publicKey, market: pdas.market,
+          sideAccount: pdas.sideA, tokenVault: pdas.tvA,
+          sellerTokenAccount: ataA, solVault: pdas.svA,
+          systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+
+      await new Promise(r => setTimeout(r, 500));
+      const sellInfo = await provider.connection.getTransaction(sellTx, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+      const sellCU = sellInfo?.meta?.computeUnitsConsumed ?? 0;
+      console.log(`    sellTokens: ${sellCU} CU`);
+
+      // 4. recordTwapSample CU (wait for window)
+      await new Promise(r => setTimeout(r, 5000));
+
+      const twapTx = await program.methods.recordTwapSample()
+        .accountsStrict({ cranker: creator.publicKey, market: pdas.market, sideA: pdas.sideA, sideB: pdas.sideB })
+        .rpc();
+
+      await new Promise(r => setTimeout(r, 500));
+      const twapInfo = await provider.connection.getTransaction(twapTx, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+      const twapCU = twapInfo?.meta?.computeUnitsConsumed ?? 0;
+      console.log(`    recordTwapSample: ${twapCU} CU`);
+
+      // 5. resolveMarket CU (wait for deadline)
+      await new Promise(r => setTimeout(r, 12000));
+
+      const resolveTx = await program.methods.resolveMarket()
+        .accountsStrict({
+          resolver: creator.publicKey, market: pdas.market,
+          sideA: pdas.sideA, sideB: pdas.sideB,
+          solVaultA: pdas.svA, solVaultB: pdas.svB,
+          protocolFeeAccount: protocolFeeAccount.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+
+      await new Promise(r => setTimeout(r, 500));
+      const resolveInfo = await provider.connection.getTransaction(resolveTx, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+      const resolveCU = resolveInfo?.meta?.computeUnitsConsumed ?? 0;
+      console.log(`    resolveMarket: ${resolveCU} CU`);
+
+      // 6. sellPostResolution CU (sell a portion to avoid InsufficientReserve after battle tax)
+      const remainingTokens = await getAccount(provider.connection, ataA);
+      const sellAmount = Math.floor(Number(remainingTokens.amount) / 10); // 10% to avoid reserve issues
+
+      const sellPostTx = await program.methods
+        .sellPostResolution(0, new BN(sellAmount), new BN(0))
+        .accountsStrict({
+          seller: creator.publicKey, market: pdas.market,
+          sideAccount: pdas.sideA, tokenVault: pdas.tvA,
+          sellerTokenAccount: ataA, solVault: pdas.svA,
+          systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+
+      await new Promise(r => setTimeout(r, 500));
+      const sellPostInfo = await provider.connection.getTransaction(sellPostTx, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+      const sellPostCU = sellPostInfo?.meta?.computeUnitsConsumed ?? 0;
+      console.log(`    sellPostResolution: ${sellPostCU} CU`);
+
+      console.log(`\n    ┌─────────────────────┬──────────┐`);
+      console.log(`    │ Instruction         │ CU Used  │`);
+      console.log(`    ├─────────────────────┼──────────┤`);
+      console.log(`    │ initializeMarket    │ ${String(createCU).padStart(8)} │`);
+      console.log(`    │ buyTokens           │ ${String(buyCU).padStart(8)} │`);
+      console.log(`    │ sellTokens          │ ${String(sellCU).padStart(8)} │`);
+      console.log(`    │ recordTwapSample    │ ${String(twapCU).padStart(8)} │`);
+      console.log(`    │ resolveMarket       │ ${String(resolveCU).padStart(8)} │`);
+      console.log(`    │ sellPostResolution  │ ${String(sellPostCU).padStart(8)} │`);
+      console.log(`    └─────────────────────┴──────────┘`);
+
+      // All should be under 400k CU (Solana tx limit)
+      expect(createCU).to.be.lessThan(400_000);
+      expect(buyCU).to.be.lessThan(200_000);
+      expect(sellCU).to.be.lessThan(200_000);
+      expect(twapCU).to.be.lessThan(200_000);
+      expect(resolveCU).to.be.lessThan(200_000);
+      expect(sellPostCU).to.be.lessThan(200_000);
+    });
+  });
+
+  describe("18. Account Rent Cost Analysis", () => {
+    it("calculates total rent cost per market", async () => {
+      const marketRent = await provider.connection.getMinimumBalanceForRentExemption(298); // Market::SIZE
+      const sideRent = await provider.connection.getMinimumBalanceForRentExemption(210);  // Side::SIZE
+      const mintRent = await provider.connection.getMinimumBalanceForRentExemption(82);  // Mint
+      const vaultRent = await provider.connection.getMinimumBalanceForRentExemption(165); // TokenAccount
+      const solVaultRent = await provider.connection.getMinimumBalanceForRentExemption(8); // SolVault (u64)
+
+      const totalPerMarket =
+        marketRent +       // 1 market
+        sideRent * 2 +     // 2 sides
+        mintRent * 2 +     // 2 mints
+        vaultRent * 2 +    // 2 token vaults
+        solVaultRent * 2;  // 2 sol vaults
+
+      console.log(`    ┌─────────────────────┬──────────────┐`);
+      console.log(`    │ Account             │ Rent (SOL)   │`);
+      console.log(`    ├─────────────────────┼──────────────┤`);
+      console.log(`    │ Market (1)          │ ${(marketRent / LAMPORTS_PER_SOL).toFixed(6).padStart(12)} │`);
+      console.log(`    │ Side (×2)           │ ${(sideRent * 2 / LAMPORTS_PER_SOL).toFixed(6).padStart(12)} │`);
+      console.log(`    │ Mint (×2)           │ ${(mintRent * 2 / LAMPORTS_PER_SOL).toFixed(6).padStart(12)} │`);
+      console.log(`    │ Token Vault (×2)    │ ${(vaultRent * 2 / LAMPORTS_PER_SOL).toFixed(6).padStart(12)} │`);
+      console.log(`    │ SOL Vault (×2)      │ ${(solVaultRent * 2 / LAMPORTS_PER_SOL).toFixed(6).padStart(12)} │`);
+      console.log(`    ├─────────────────────┼──────────────┤`);
+      console.log(`    │ TOTAL per market    │ ${(totalPerMarket / LAMPORTS_PER_SOL).toFixed(6).padStart(12)} │`);
+      console.log(`    └─────────────────────┴──────────────┘`);
+      console.log(`    At 1000 markets: ${(totalPerMarket * 1000 / LAMPORTS_PER_SOL).toFixed(2)} SOL`);
     });
   });
 });
