@@ -41,8 +41,7 @@ pub struct SellTokens<'info> {
         mut,
         constraint = sol_vault.key() == side_account.sol_reserve_vault @ DuelError::InvalidSide,
     )]
-    /// CHECK: SOL vault PDA, validated by constraint
-    pub sol_vault: SystemAccount<'info>,
+    pub sol_vault: Account<'info, SolVault>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -75,7 +74,7 @@ pub fn handler(
     let penalty_active = clock.unix_timestamp >= (market.deadline - market.protection_activation_offset as i64);
 
     if penalty_active {
-        let current_reserve = ctx.accounts.sol_vault.lamports();
+        let current_reserve = ctx.accounts.sol_vault.to_account_info().lamports();
         penalty_bps = penalty::sell_penalty_bps(
             current_reserve,
             side_account.peak_reserve,
@@ -95,7 +94,7 @@ pub fn handler(
     require!(sol_after_penalty >= min_sol_out, DuelError::SlippageExceeded);
 
     // Check vault has enough SOL
-    let vault_balance = ctx.accounts.sol_vault.lamports();
+    let vault_balance = ctx.accounts.sol_vault.to_account_info().lamports();
     require!(vault_balance >= sol_after_penalty, DuelError::InsufficientReserve);
 
     // Transfer tokens from seller to vault

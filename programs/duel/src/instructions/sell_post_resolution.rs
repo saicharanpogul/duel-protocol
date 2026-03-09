@@ -40,8 +40,7 @@ pub struct SellPostResolution<'info> {
         mut,
         constraint = sol_vault.key() == side_account.sol_reserve_vault @ DuelError::InvalidSide,
     )]
-    /// CHECK: SOL vault PDA, validated by constraint
-    pub sol_vault: SystemAccount<'info>,
+    pub sol_vault: Account<'info, SolVault>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -69,7 +68,7 @@ pub fn handler(
     require!(sol_amount >= min_sol_out, DuelError::SlippageExceeded);
 
     // Check vault has enough SOL
-    let vault_balance = ctx.accounts.sol_vault.lamports();
+    let vault_balance = ctx.accounts.sol_vault.to_account_info().lamports();
     require!(vault_balance >= sol_amount, DuelError::InsufficientReserve);
 
     // Transfer tokens from seller to vault

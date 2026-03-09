@@ -79,23 +79,25 @@ pub struct InitializeMarket<'info> {
     )]
     pub token_vault_b: Box<Account<'info, TokenAccount>>,
 
-    /// SOL vault for Side A (PDA, holds lamports)
+    /// SOL vault for Side A (program-owned PDA)
     #[account(
-        mut,
+        init,
+        payer = creator,
+        space = SolVault::SIZE,
         seeds = [b"sol_vault", market.key().as_ref(), &[0u8]],
         bump,
     )]
-    /// CHECK: SOL vault PDA, validated by seeds
-    pub sol_vault_a: SystemAccount<'info>,
+    pub sol_vault_a: Account<'info, SolVault>,
 
-    /// SOL vault for Side B (PDA, holds lamports)
+    /// SOL vault for Side B (program-owned PDA)
     #[account(
-        mut,
+        init,
+        payer = creator,
+        space = SolVault::SIZE,
         seeds = [b"sol_vault", market.key().as_ref(), &[1u8]],
         bump,
     )]
-    /// CHECK: SOL vault PDA, validated by seeds
-    pub sol_vault_b: SystemAccount<'info>,
+    pub sol_vault_b: Account<'info, SolVault>,
 
     /// Protocol fee recipient
     /// CHECK: Arbitrary fee account, no validation needed

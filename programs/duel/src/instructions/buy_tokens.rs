@@ -42,8 +42,7 @@ pub struct BuyTokens<'info> {
         mut,
         constraint = sol_vault.key() == side_account.sol_reserve_vault @ DuelError::InvalidSide,
     )]
-    /// CHECK: SOL vault PDA, validated by constraint
-    pub sol_vault: SystemAccount<'info>,
+    pub sol_vault: Account<'info, SolVault>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -119,7 +118,7 @@ pub fn handler(
         .ok_or(DuelError::MathOverflow)?;
 
     // Update peak reserve
-    let new_reserve = ctx.accounts.sol_vault.lamports();
+    let new_reserve = ctx.accounts.sol_vault.to_account_info().lamports();
     if new_reserve > side_account.peak_reserve {
         side_account.peak_reserve = new_reserve;
     }

@@ -32,16 +32,14 @@ pub struct ResolveMarket<'info> {
         mut,
         constraint = sol_vault_a.key() == side_a.sol_reserve_vault @ DuelError::InvalidSide,
     )]
-    /// CHECK: SOL vault PDA, validated by constraint
-    pub sol_vault_a: SystemAccount<'info>,
+    pub sol_vault_a: Account<'info, SolVault>,
 
     /// SOL vault for Side B
     #[account(
         mut,
         constraint = sol_vault_b.key() == side_b.sol_reserve_vault @ DuelError::InvalidSide,
     )]
-    /// CHECK: SOL vault PDA, validated by constraint
-    pub sol_vault_b: SystemAccount<'info>,
+    pub sol_vault_b: Account<'info, SolVault>,
 
     /// Protocol fee recipient
     #[account(
@@ -90,8 +88,8 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
         winner = 1;
     } else {
         // Tie: higher SOL reserve wins
-        let reserve_a = ctx.accounts.sol_vault_a.lamports();
-        let reserve_b = ctx.accounts.sol_vault_b.lamports();
+        let reserve_a = ctx.accounts.sol_vault_a.to_account_info().lamports();
+        let reserve_b = ctx.accounts.sol_vault_b.to_account_info().lamports();
         if reserve_a >= reserve_b {
             winner = 0;
         } else {
@@ -112,7 +110,7 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
         )
     };
 
-    let losing_reserve = losing_vault.lamports();
+    let losing_reserve = losing_vault.to_account_info().lamports();
     let transfer_amount = (losing_reserve as u128)
         .checked_mul(market.battle_tax_bps as u128)
         .ok_or(DuelError::MathOverflow)?
