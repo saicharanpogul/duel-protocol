@@ -215,7 +215,7 @@ describe("duel - edge cases & security", () => {
           .buyTokens(0, new BN(0), new BN(0))
           .accounts({
             buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
-            tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
+            tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
             systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();

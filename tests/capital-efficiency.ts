@@ -865,7 +865,7 @@ describe("duel - capital efficiency & battle testing", () => {
           .accountsStrict({
             buyer: creator.publicKey, market: pdas.market,
             sideAccount: pdas.sideB, // WRONG: side B account for side=0
-            tokenVault: pdas.tvA, buyerTokenAccount: ata, solVault: pdas.svA,
+            tokenMint: pdas.mintA, tokenVault: pdas.tvA, buyerTokenAccount: ata, solVault: pdas.svA,
             systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
@@ -893,7 +893,7 @@ describe("duel - capital efficiency & battle testing", () => {
           .accountsStrict({
             seller: creator.publicKey, market: pdas2.market, // WRONG market
             sideAccount: pdas2.sideA,
-            tokenVault: pdas2.tvA, sellerTokenAccount: ata, solVault: pdas2.svA,
+            tokenMint: pdas1.mintA, tokenVault: pdas2.tvA, sellerTokenAccount: ata, solVault: pdas2.svA,
             systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
@@ -987,7 +987,7 @@ describe("duel - capital efficiency & battle testing", () => {
         .buyTokens(0, new BN(1 * LAMPORTS_PER_SOL), new BN(1))
         .accountsStrict({
           buyer: creator.publicKey, market: pdas.market,
-          sideAccount: pdas.sideA, tokenVault: pdas.tvA,
+          sideAccount: pdas.sideA, tokenMint: pdas.mintA, tokenVault: pdas.tvA,
           buyerTokenAccount: ataA, solVault: pdas.svA,
           systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
@@ -1009,7 +1009,7 @@ describe("duel - capital efficiency & battle testing", () => {
         .sellTokens(0, new BN(halfTokens), new BN(1))
         .accountsStrict({
           seller: creator.publicKey, market: pdas.market,
-          sideAccount: pdas.sideA, tokenVault: pdas.tvA,
+          sideAccount: pdas.sideA, tokenMint: pdas.mintA, tokenVault: pdas.tvA,
           sellerTokenAccount: ataA, solVault: pdas.svA,
           systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
@@ -1058,7 +1058,7 @@ describe("duel - capital efficiency & battle testing", () => {
         .sellPostResolution(0, new BN(sellAmount), new BN(0))
         .accountsStrict({
           seller: creator.publicKey, market: pdas.market,
-          sideAccount: pdas.sideA, tokenVault: pdas.tvA,
+          sideAccount: pdas.sideA, tokenMint: pdas.mintA, tokenVault: pdas.tvA,
           sellerTokenAccount: ataA, solVault: pdas.svA,
           systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
@@ -1330,27 +1330,33 @@ describe("duel - capital efficiency & battle testing", () => {
       await buyTokens(pdas, 0, new BN(1 * LAMPORTS_PER_SOL));
 
       try {
-        // Attempt graduation before resolution
+        const positionNftMint = Keypair.generate();
+        // Attempt graduation before resolution — should fail with MarketNotResolved
         await program.methods.graduateToDex(0)
           .accountsStrict({
             authority: creator.publicKey,
             market: pdas.market, sideAccount: pdas.sideA,
             tokenMint: pdas.mintA, tokenVault: pdas.tvA, solVault: pdas.svA,
             wsolMint: new PublicKey("So11111111111111111111111111111111111111112"),
-            pool: Keypair.generate().publicKey,
+            positionNftMint: positionNftMint.publicKey,
+            positionNftAccount: Keypair.generate().publicKey,
             poolAuthority: Keypair.generate().publicKey,
-            poolTokenAVault: Keypair.generate().publicKey,
-            poolTokenBVault: Keypair.generate().publicKey,
-            lpMint: Keypair.generate().publicKey,
-            creatorTokenA: Keypair.generate().publicKey,
-            creatorTokenB: Keypair.generate().publicKey,
-            creatorLpToken: Keypair.generate().publicKey,
+            pool: Keypair.generate().publicKey,
+            position: Keypair.generate().publicKey,
+            tokenAVault: Keypair.generate().publicKey,
+            tokenBVault: Keypair.generate().publicKey,
+            payerTokenA: Keypair.generate().publicKey,
+            payerTokenB: Keypair.generate().publicKey,
+            tokenAProgram: TOKEN_PROGRAM_ID,
+            tokenBProgram: TOKEN_PROGRAM_ID,
+            token2022Program: new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"),
+            eventAuthority: Keypair.generate().publicKey,
             meteoraProgram: new PublicKey("cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"),
             tokenProgram: TOKEN_PROGRAM_ID,
             associatedTokenProgram: new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
             systemProgram: SystemProgram.programId,
-            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           })
+          .signers([positionNftMint])
           .rpc();
         expect.fail("should have rejected — market not resolved");
       } catch (e: any) {
