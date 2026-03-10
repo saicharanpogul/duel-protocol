@@ -20,6 +20,8 @@ pub struct Side {
     pub peak_reserve: u64,
     /// Sum of price samples for TWAP (u128 to prevent overflow)
     pub twap_accumulator: u128,
+    /// Last observation value for lagging TWAP (0 if disabled or first sample)
+    pub last_observation: u64,
     /// PDA bump
     pub bump: u8,
 }
@@ -35,6 +37,7 @@ impl Side {
         + 8   // circulating_supply
         + 8   // peak_reserve
         + 16  // twap_accumulator
+        + 8   // last_observation
         + 1   // bump
-        + 32; // padding
+        + 24; // padding (reduced from 32)
 }

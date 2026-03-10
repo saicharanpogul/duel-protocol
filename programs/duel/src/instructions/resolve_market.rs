@@ -49,6 +49,14 @@ pub struct ResolveMarket<'info> {
     /// CHECK: Fee account validated by market state
     pub protocol_fee_account: UncheckedAccount<'info>,
 
+    /// Creator fee recipient
+    #[account(
+        mut,
+        constraint = creator_fee_account.key() == market.creator_fee_account @ DuelError::InvalidMarketConfig,
+    )]
+    /// CHECK: Fee account validated by market state
+    pub creator_fee_account: UncheckedAccount<'info>,
+
     pub system_program: Program<'info, System>,
 }
 
@@ -63,7 +71,6 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
     require!(market.status != MarketStatus::Resolved, DuelError::MarketAlreadyResolved);
 
     // Must have sufficient TWAP samples to prevent manipulation
-    // Require at least twap_window / twap_interval samples (fully sampled window)
     let min_samples = (market.twap_window / market.twap_interval).max(1) as u32;
     require!(market.twap_samples_count >= min_samples, DuelError::NoTwapSamples);
 
@@ -82,6 +89,52 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
         .checked_div(samples)
         .ok_or(DuelError::MathOverflow)? as u64;
 
+    // Check for draw: if TWAP spread is below min_twap_spread_bps threshold
+    let is_draw = if market.min_twap_spread_bps > 0 {
+        let higher = final_twap_a.max(final_twap_b);
+        let lower = final_twap_a.min(final_twap_b);
+        if higher == 0 {
+            // Both zero: draw
+            true
+        } else {
+            // spread_bps = (higher - lower) * 10000 / higher
+            let spread_bps = ((higher - lower) as u128)
+                .checked_mul(BPS_DENOMINATOR as u128)
+                .ok_or(DuelError::MathOverflow)?
+                .checked_div(higher as u128)
+                .ok_or(DuelError::MathOverflow)? as u16;
+            spread_bps < market.min_twap_spread_bps
+        }
+    } else {
+        // No min spread: only exact tie with equal reserves is a draw
+        final_twap_a == final_twap_b && {
+            let reserve_a = ctx.accounts.sol_vault_a.to_account_info().lamports();
+            let reserve_b = ctx.accounts.sol_vault_b.to_account_info().lamports();
+            reserve_a == reserve_b
+        }
+    };
+
+    if is_draw {
+        // Draw: no reserve transfer, both sides keep their reserves
+        market.status = MarketStatus::Resolved;
+        market.winner = None;
+        market.final_twap_a = final_twap_a;
+        market.final_twap_b = final_twap_b;
+
+        emit!(MarketResolved {
+            market: market.key(),
+            winner: 255, // sentinel for draw
+            is_draw: true,
+            final_twap_a,
+            final_twap_b,
+            transfer_amount: 0,
+            protocol_fee: 0,
+            creator_fee: 0,
+        });
+
+        return Ok(());
+    }
+
     // Determine winner (higher TWAP wins; tie goes to higher reserve)
     let winner: u8;
     if final_twap_a > final_twap_b {
@@ -89,7 +142,7 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
     } else if final_twap_b > final_twap_a {
         winner = 1;
     } else {
-        // Tie: higher SOL reserve wins
+        // Exact tie: higher SOL reserve wins
         let reserve_a = ctx.accounts.sol_vault_a.to_account_info().lamports();
         let reserve_b = ctx.accounts.sol_vault_b.to_account_info().lamports();
         if reserve_a >= reserve_b {
@@ -119,13 +172,25 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
         .checked_div(BPS_DENOMINATOR as u128)
         .ok_or(DuelError::MathOverflow)? as u64;
 
-    let protocol_fee = (transfer_amount as u128)
+    // Creator fee: deducted first from transfer_amount
+    let creator_fee = (transfer_amount as u128)
+        .checked_mul(market.creator_fee_bps as u128)
+        .ok_or(DuelError::MathOverflow)?
+        .checked_div(BPS_DENOMINATOR as u128)
+        .ok_or(DuelError::MathOverflow)? as u64;
+
+    // Protocol fee: deducted from remaining after creator fee
+    let after_creator = transfer_amount
+        .checked_sub(creator_fee)
+        .ok_or(DuelError::MathOverflow)?;
+
+    let protocol_fee = (after_creator as u128)
         .checked_mul(market.protocol_fee_bps as u128)
         .ok_or(DuelError::MathOverflow)?
         .checked_div(BPS_DENOMINATOR as u128)
         .ok_or(DuelError::MathOverflow)? as u64;
 
-    let transfer_to_winner = transfer_amount
+    let transfer_to_winner = after_creator
         .checked_sub(protocol_fee)
         .ok_or(DuelError::MathOverflow)?;
 
@@ -133,6 +198,12 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
     if transfer_to_winner > 0 {
         **losing_vault.to_account_info().try_borrow_mut_lamports()? -= transfer_to_winner;
         **winning_vault.to_account_info().try_borrow_mut_lamports()? += transfer_to_winner;
+    }
+
+    // Transfer creator fee
+    if creator_fee > 0 {
+        **losing_vault.to_account_info().try_borrow_mut_lamports()? -= creator_fee;
+        **ctx.accounts.creator_fee_account.to_account_info().try_borrow_mut_lamports()? += creator_fee;
     }
 
     // Transfer protocol fee
@@ -150,11 +221,14 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
     emit!(MarketResolved {
         market: market.key(),
         winner,
+        is_draw: false,
         final_twap_a,
         final_twap_b,
         transfer_amount: transfer_to_winner,
         protocol_fee,
+        creator_fee,
     });
 
     Ok(())
 }
+

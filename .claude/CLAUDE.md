@@ -2,7 +2,7 @@
 
 ## Project Identity
 
-Duel Protocol is a general-purpose on-chain primitive for binary outcome markets with self-contained liquidity and manipulation-resistant TWAP resolution. Built from scratch on Solana, inspired by Meteora DBC's curve architecture.
+Duel Protocol is a general-purpose on-chain primitive for community-scale competitive markets with self-contained liquidity and manipulation-resistant TWAP resolution. Built from scratch on Solana, inspired by Meteora DBC's curve architecture. Target users are fans and communities putting $5-$500 on opinions, not institutional traders. This is pump.fun meets Twitter polls meets fantasy sports, not Polymarket.
 
 Repo: `duel-protocol` (monorepo)
 License: MIT

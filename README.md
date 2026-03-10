@@ -1,8 +1,16 @@
 # Duel Protocol
 
-A general-purpose on-chain primitive for binary outcome markets with self-contained liquidity and manipulation-resistant TWAP resolution.
+A general-purpose on-chain primitive for community-scale competitive markets with self-contained liquidity and manipulation-resistant TWAP resolution.
 
-Two bonding curve tokens compete. The side with the higher time-weighted average price (TWAP) wins. A configurable portion of the losing side's reserve is transferred to the winning side. No external liquidity providers, no oracles, no market makers.
+Two bonding curve tokens compete. The side with the higher time-weighted average price (TWAP) wins. A configurable portion of the losing side's reserve is transferred to the winning side. No external liquidity providers, no oracles, no market makers. This is pump.fun meets Twitter polls meets fantasy sports.
+
+## What This Is
+
+A gamified engagement primitive where communities put skin in the game on opinions, debates, and competitions. The target user is a fan putting $5 to $500 on their side. The bonding curve is the market maker. The TWAP is the judge.
+
+## What This Is Not
+
+A prediction market for sophisticated traders. Duel does not produce calibrated probability signals, does not offer fixed payouts, and does not compete with Polymarket. See the [Technical Thesis](docs/THESIS.md) for honest limitations.
 
 ## How It Works
 
@@ -15,12 +23,13 @@ Two bonding curve tokens compete. The side with the higher time-weighted average
 
 ## Use Cases
 
-- Prediction markets (yes/no outcomes with built-in liquidity)
-- Governance (futarchy-style TWAP-resolved proposals)
-- Content curation and creative battles
-- Competitive gaming and esports sentiment markets
-- Dispute resolution with economic skin in the game
+- Subjective debates (Messi vs Ronaldo, Vim vs Emacs)
+- Creative battles (musicians, artists, content creators competing for fan support)
+- Token launches via competition (battle as launch narrative, survivors graduate to DEX)
+- Small DAO governance (50-person DAOs that can't afford Polymarket infrastructure)
+- Community-driven prediction (is this project legit?)
 - Meme token head-to-head battles
+- Competitive gaming and esports sentiment markets
 
 ## Architecture
 

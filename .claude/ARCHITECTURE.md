@@ -60,6 +60,8 @@ pub struct Market {
     pub sell_penalty_max_bps: u16,   // 0-3000
     pub protection_activation_offset: u64, // Seconds before deadline
     pub curve_params: CurveParams,
+    pub max_observation_change_per_update: u64, // 0 = disabled (raw price TWAP)
+    pub min_twap_spread_bps: u16,    // 0 = disabled (any TWAP difference resolves)
     pub status: MarketStatus,
     pub twap_samples_count: u32,
     pub last_sample_ts: i64,
@@ -85,7 +87,8 @@ pub struct Side {
     pub total_supply: u64,           // Fixed at creation
     pub circulating_supply: u64,     // Tokens held by participants
     pub peak_reserve: u64,           // Historical max SOL reserve (for sell penalty calc)
-    pub twap_accumulator: u128,      // Sum of price samples
+    pub twap_accumulator: u128,      // Sum of price samples (or lagging observations)
+    pub last_observation: u64,       // Last observation value (for lagging TWAP, 0 if disabled)
     pub bump: u8,
 }
 ```
@@ -208,12 +211,17 @@ pub struct InitializeMarket {
 - At least `twap_interval` seconds since `last_sample_ts`
 
 **Actions**:
-1. Calculate current price for both sides from curve math.
-2. Add prices to respective `twap_accumulator`.
-3. Increment `twap_samples_count`.
-4. Update `last_sample_ts`.
-5. If market status is `Active`, transition to `TwapObservation`.
-6. Emit TwapSampleEvent.
+1. Calculate current spot price for both sides from curve math.
+2. If `max_observation_change_per_update > 0` (lagging TWAP enabled):
+   a. Clamp each side's observation toward spot price by at most `max_observation_change_per_update`.
+   b. Update `last_observation` for each side.
+   c. Add observation values (not raw prices) to respective `twap_accumulator`.
+3. If `max_observation_change_per_update == 0` (standard TWAP):
+   a. Add raw spot prices to respective `twap_accumulator`.
+4. Increment `twap_samples_count`.
+5. Update `last_sample_ts`.
+6. If market status is `Active`, transition to `TwapObservation`.
+7. Emit TwapSampleEvent.
 
 ### resolve_market
 
@@ -228,14 +236,15 @@ pub struct InitializeMarket {
 **Actions**:
 1. Calculate `final_twap_a = side_a.twap_accumulator / twap_samples_count`.
 2. Calculate `final_twap_b = side_b.twap_accumulator / twap_samples_count`.
-3. Determine winner (higher TWAP wins; if tie, higher reserve wins).
-4. Calculate transfer: `transfer_amount = losing_side.sol_reserve * battle_tax_bps / 10000`.
-5. Calculate fee: `fee = transfer_amount * protocol_fee_bps / 10000`.
-6. Transfer `transfer_amount - fee` SOL from losing vault to winning vault.
-7. Transfer `fee` SOL from losing vault to protocol fee account.
-8. Update market status to `Resolved`.
-9. Set `winner`.
-10. Emit ResolveEvent.
+3. If `min_twap_spread_bps > 0`: check that the winning TWAP exceeds the losing TWAP by at least `min_twap_spread_bps`. If neither side meets the threshold, resolve as a draw (no reserve transfer, both sides retain their reserves, minus protocol fee on both).
+4. Determine winner (higher TWAP wins; if tie, higher reserve wins).
+5. Calculate transfer: `transfer_amount = losing_side.sol_reserve * battle_tax_bps / 10000`.
+6. Calculate fee: `fee = transfer_amount * protocol_fee_bps / 10000`.
+7. Transfer `transfer_amount - fee` SOL from losing vault to winning vault.
+8. Transfer `fee` SOL from losing vault to protocol fee account.
+9. Update market status to `Resolved`.
+10. Set `winner` (or `None` for draw).
+11. Emit ResolveEvent.
 
 ### sell_post_resolution
 

@@ -45,13 +45,21 @@ pub struct Market {
     pub protection_activation_offset: u64,
     /// Bonding curve parameters
     pub curve_params: CurveParams,
+    /// Max observation change per TWAP update (0 = raw price, >0 = lagging filter)
+    pub max_observation_change_per_update: u64,
+    /// Min TWAP spread in bps to determine winner (0 = any difference, >0 = draw if below)
+    pub min_twap_spread_bps: u16,
+    /// Creator fee in basis points (deducted from transfer before protocol fee)
+    pub creator_fee_bps: u16,
+    /// Creator fee recipient
+    pub creator_fee_account: Pubkey,
     /// Current market status
     pub status: MarketStatus,
     /// Number of TWAP samples recorded
     pub twap_samples_count: u32,
     /// Timestamp of last TWAP sample
     pub last_sample_ts: i64,
-    /// Winner side index (0 = A, 1 = B), None if not resolved
+    /// Winner side index (0 = A, 1 = B), None if not resolved or draw
     pub winner: Option<u8>,
     /// Final TWAP for side A (lamports, price * 10^9 for precision)
     pub final_twap_a: u64,
@@ -83,6 +91,10 @@ impl Market {
         + 2   // sell_penalty_max_bps
         + 8   // protection_activation_offset
         + (8 + 1 + 8)  // curve_params (a, n, b)
+        + 8   // max_observation_change_per_update
+        + 2   // min_twap_spread_bps
+        + 2   // creator_fee_bps
+        + 32  // creator_fee_account
         + 1   // status enum
         + 4   // twap_samples_count
         + 8   // last_sample_ts
@@ -94,5 +106,5 @@ impl Market {
         + 1   // graduated_b
         + 1   // lp_lock_mode
         + 1   // bump
-        + 61; // padding (reduced from 62)
+        + 17; // padding (reduced for new fields)
 }

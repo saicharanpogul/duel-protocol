@@ -38,6 +38,12 @@ pub enum DuelError {
     InsufficientReserveForGraduation,
     #[msg("Side must be graduated before vault closure")]
     NotGraduated,
-    #[msg("LP is permanently locked — cannot remove liquidity or close position")]
+    #[msg("LP is permanently locked, cannot remove liquidity or close position")]
     LpLocked,
+    #[msg("Protocol is paused")]
+    ProtocolPaused,
+    #[msg("TWAP spread below minimum threshold, resolved as draw")]
+    DrawResult,
+    #[msg("Invalid fee configuration")]
+    InvalidFeeConfig,
 }

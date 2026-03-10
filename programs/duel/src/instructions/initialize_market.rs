@@ -159,6 +159,9 @@ pub fn handler(
     symbol_b: String,
     uri_b: String,
     lp_lock_mode: LpLockMode,
+    max_observation_change_per_update: u64,
+    min_twap_spread_bps: u16,
+    creator_fee_bps: u16,
 ) -> Result<()> {
     let clock = Clock::get()?;
     let now = clock.unix_timestamp;
@@ -190,6 +193,11 @@ pub fn handler(
     );
     require!(curve_params.b > 0, DuelError::InvalidCurveParams);
     require!(total_supply_per_side > 0, DuelError::InvalidMarketConfig);
+    // Creator + protocol fee cannot exceed 25% of transfer
+    require!(
+        (creator_fee_bps as u32) + (protocol_fee_bps as u32) <= 2500,
+        DuelError::InvalidFeeConfig
+    );
 
     let market = &mut ctx.accounts.market;
     let side_a = &mut ctx.accounts.side_a;
@@ -208,6 +216,10 @@ pub fn handler(
     market.sell_penalty_max_bps = sell_penalty_max_bps;
     market.protection_activation_offset = protection_activation_offset;
     market.curve_params = curve_params;
+    market.max_observation_change_per_update = max_observation_change_per_update;
+    market.min_twap_spread_bps = min_twap_spread_bps;
+    market.creator_fee_bps = creator_fee_bps;
+    market.creator_fee_account = ctx.accounts.creator.key();
     market.status = MarketStatus::Active;
     market.twap_samples_count = 0;
     market.last_sample_ts = 0;
@@ -230,6 +242,7 @@ pub fn handler(
     side_a.circulating_supply = 0;
     side_a.peak_reserve = 0;
     side_a.twap_accumulator = 0;
+    side_a.last_observation = 0;
     side_a.bump = ctx.bumps.side_a;
 
     // Initialize Side B
@@ -242,6 +255,7 @@ pub fn handler(
     side_b.circulating_supply = 0;
     side_b.peak_reserve = 0;
     side_b.twap_accumulator = 0;
+    side_b.last_observation = 0;
     side_b.bump = ctx.bumps.side_b;
 
     // Mint total supply into each token vault

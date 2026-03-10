@@ -35,6 +35,9 @@ pub mod duel {
         symbol_b: String,
         uri_b: String,
         lp_lock_mode: state::LpLockMode,
+        max_observation_change_per_update: u64,
+        min_twap_spread_bps: u16,
+        creator_fee_bps: u16,
     ) -> Result<()> {
         instructions::initialize_market::handler(
             ctx,
@@ -55,6 +58,9 @@ pub mod duel {
             symbol_b,
             uri_b,
             lp_lock_mode,
+            max_observation_change_per_update,
+            min_twap_spread_bps,
+            creator_fee_bps,
         )
     }
 

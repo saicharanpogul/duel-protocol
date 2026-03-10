@@ -34,6 +34,8 @@ pub struct TwapSampled {
     pub market: Pubkey,
     pub price_a: u64,
     pub price_b: u64,
+    pub observation_a: u64,
+    pub observation_b: u64,
     pub sample_count: u32,
     pub timestamp: i64,
 }
@@ -42,10 +44,12 @@ pub struct TwapSampled {
 pub struct MarketResolved {
     pub market: Pubkey,
     pub winner: u8,
+    pub is_draw: bool,
     pub final_twap_a: u64,
     pub final_twap_b: u64,
     pub transfer_amount: u64,
     pub protocol_fee: u64,
+    pub creator_fee: u64,
 }
 
 #[event]
