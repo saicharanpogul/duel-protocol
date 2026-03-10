@@ -15,6 +15,16 @@ export const WSOL_MINT = new PublicKey(
   "So11111111111111111111111111111111111111112"
 );
 
+/** Token-2022 program ID */
+export const TOKEN_2022_PROGRAM_ID = new PublicKey(
+  "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+);
+
+/** DAMM v2 pool authority (constant PDA) */
+export const DAMM_V2_POOL_AUTHORITY = new PublicKey(
+  "HLnpSz9hBF7wsohdFRYBzi4BNGzar3bPVq34JFsEfnY"
+);
+
 /** BPS denominator (10_000) */
 export const BPS_DENOMINATOR = 10_000;
 
@@ -35,3 +45,9 @@ export const MAX_TWAP_INTERVAL = 3_600;
 
 /** Minimum graduation reserve (lamports) */
 export const MIN_GRADUATION_RESERVE = 100_000_000; // 0.1 SOL
+
+/** Meteora DAMM v2 MIN_SQRT_PRICE */
+export const MIN_SQRT_PRICE = BigInt("4295048016");
+
+/** Meteora DAMM v2 MAX_SQRT_PRICE */
+export const MAX_SQRT_PRICE = BigInt("79226673521066979257578248091");

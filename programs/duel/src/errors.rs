@@ -36,4 +36,6 @@ pub enum DuelError {
     AlreadyGraduated,
     #[msg("Insufficient reserve for DEX graduation")]
     InsufficientReserveForGraduation,
+    #[msg("Side must be graduated before vault closure")]
+    NotGraduated,
 }

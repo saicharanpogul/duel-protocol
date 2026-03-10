@@ -97,4 +97,18 @@ pub mod duel {
     ) -> Result<()> {
         instructions::graduate_to_dex::handler(ctx, side)
     }
+
+    pub fn close_sol_vault(
+        ctx: Context<CloseSolVault>,
+        side: u8,
+    ) -> Result<()> {
+        instructions::close_sol_vault::handler(ctx, side)
+    }
+
+    pub fn claim_pool_fees(
+        ctx: Context<ClaimPoolFees>,
+        side: u8,
+    ) -> Result<()> {
+        instructions::claim_pool_fees::handler(ctx, side)
+    }
 }
