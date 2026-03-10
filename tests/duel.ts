@@ -57,6 +57,7 @@ describe("duel", () => {
   let solVaultA: PublicKey;
   let solVaultB: PublicKey;
   let protocolFeeAccount: Keypair;
+  let configPda: PublicKey;
 
   before(async () => {
     [marketPda] = PublicKey.findProgramAddressSync(
@@ -101,6 +102,27 @@ describe("duel", () => {
       program.programId
     );
     protocolFeeAccount = Keypair.generate();
+
+    [configPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("config")],
+      program.programId
+    );
+
+    // Initialize ProgramConfig (once)
+    try {
+      await program.account.programConfig.fetch(configPda);
+    } catch {
+      await prefundPda(protocolFeeAccount.publicKey);
+      await program.methods
+        .initializeConfig(125, new BN(0))
+        .accounts({
+          admin: creator.publicKey,
+          config: configPda,
+          protocolFeeAccount: protocolFeeAccount.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    }
   });
 
   // Helper: pre-fund a PDA so it's rent-exempt
@@ -148,6 +170,9 @@ describe("duel", () => {
           "DUEL-B",
           "https://duel.protocol/tokens/b",
           { unlocked: {} },
+          new BN(0),  // maxObservationChangePerUpdate (disabled)
+          0,          // minTwapSpreadBps (any difference resolves)
+          200,        // creatorFeeBps (2%)
         )
         .accounts({
           creator: creator.publicKey,
@@ -221,6 +246,7 @@ describe("duel", () => {
           tokenVault: tokenVaultA,
           buyerTokenAccount: buyerTokenAccountA,
           solVault: solVaultA,
+          config: configPda,
           systemProgram: SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
@@ -263,6 +289,7 @@ describe("duel", () => {
           tokenVault: tokenVaultA,
           sellerTokenAccount: buyerTokenAccountA,
           solVault: solVaultA,
+          config: configPda,
           systemProgram: SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
@@ -305,6 +332,7 @@ describe("duel", () => {
           tokenVault: tokenVaultB,
           buyerTokenAccount: buyerTokenAccountB,
           solVault: solVaultB,
+          config: configPda,
           systemProgram: SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
@@ -348,6 +376,7 @@ describe("duel", () => {
             solVaultA: solVaultA,
             solVaultB: solVaultB,
             protocolFeeAccount: protocolFeeAccount.publicKey,
+            creatorFeeAccount: creator.publicKey,
             systemProgram: SystemProgram.programId,
           })
           .rpc();
@@ -373,6 +402,7 @@ describe("duel", () => {
             tokenVault: tokenVaultA,
             sellerTokenAccount: buyerTokenAccountA,
             solVault: solVaultA,
+            config: configPda,
             systemProgram: SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
           })
@@ -437,6 +467,9 @@ describe("duel", () => {
           "SH-B",
           "",
           { unlocked: {} },
+          new BN(0),  // maxObservationChangePerUpdate
+          0,          // minTwapSpreadBps
+          0,          // creatorFeeBps
         )
         .accounts({
           creator: creator.publicKey,
@@ -473,6 +506,7 @@ describe("duel", () => {
         .accounts({
           buyer: creator.publicKey, market: m, sideAccount: sA,
           tokenMint: mA, tokenVault: tvA, buyerTokenAccount: btA, solVault: svA,
+          config: configPda,
           systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
@@ -483,6 +517,7 @@ describe("duel", () => {
         .accounts({
           buyer: creator.publicKey, market: m, sideAccount: sB,
           tokenMint: mB, tokenVault: tvB, buyerTokenAccount: btB, solVault: svB,
+          config: configPda,
           systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
@@ -515,6 +550,7 @@ describe("duel", () => {
           resolver: creator.publicKey, market: m, sideA: sA, sideB: sB,
           solVaultA: svA, solVaultB: svB,
           protocolFeeAccount: protocolFeeAccount.publicKey,
+          creatorFeeAccount: creator.publicKey,
           systemProgram: SystemProgram.programId,
         })
         .rpc();
@@ -539,6 +575,7 @@ describe("duel", () => {
         .accounts({
           seller: creator.publicKey, market: m, sideAccount: sA,
           tokenMint: mA, tokenVault: tvA, sellerTokenAccount: btA, solVault: svA,
+          config: configPda,
           systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();

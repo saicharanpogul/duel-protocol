@@ -37,6 +37,30 @@ describe("duel - edge cases & security", () => {
   const curveParams = { a: new BN(1_000_000), n: 1, b: new BN(1_000) };
   const totalSupply = new BN(1_000_000_000);
   const protocolFeeAccount = Keypair.generate();
+  let configPda: PublicKey;
+
+  before(async () => {
+    [configPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("config")],
+      program.programId
+    );
+
+    // Initialize ProgramConfig if not yet created
+    try {
+      await program.account.programConfig.fetch(configPda);
+    } catch {
+      await prefundPda(protocolFeeAccount.publicKey);
+      await program.methods
+        .initializeConfig(125, new BN(0))
+        .accounts({
+          admin: creator.publicKey,
+          config: configPda,
+          protocolFeeAccount: protocolFeeAccount.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    }
+  });
 
   // Helper: pre-fund a PDA so it's rent-exempt
   async function prefundPda(pda: PublicKey) {
@@ -109,6 +133,9 @@ describe("duel - edge cases & security", () => {
         "EB",
         "",
         { unlocked: {} },
+        new BN(0),  // maxObservationChangePerUpdate
+        0,          // minTwapSpreadBps
+        0,          // creatorFeeBps
       )
       .accounts({
         creator: creator.publicKey,
@@ -116,7 +143,7 @@ describe("duel - edge cases & security", () => {
         tokenMintA: mintA, tokenMintB: mintB,
         tokenVaultA: tvA, tokenVaultB: tvB,
         solVaultA: svA, solVaultB: svB,
-        protocolFeeAccount: protocolFeeAccount.publicKey,
+        protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
         metadataA: findMetadataPda(mintA),
         metadataB: findMetadataPda(mintB),
         tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
@@ -155,7 +182,8 @@ describe("duel - edge cases & security", () => {
       .accounts({
         buyer: creator.publicKey, market, sideAccount,
         tokenMint: mint, tokenVault, buyerTokenAccount: ata, solVault,
-        systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+        config: configPda,
+        config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
       })
       .rpc();
 
@@ -186,7 +214,8 @@ describe("duel - edge cases & security", () => {
           .accounts({
             buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
             tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
-            systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+            config: configPda,
+            config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have thrown");
@@ -216,7 +245,8 @@ describe("duel - edge cases & security", () => {
           .accounts({
             buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
             tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
-            systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+            config: configPda,
+            config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have thrown");
@@ -234,7 +264,8 @@ describe("duel - edge cases & security", () => {
           .accounts({
             seller: creator.publicKey, market: m.market, sideAccount: m.sideA,
             tokenMint: m.mintA, tokenVault: m.tvA, sellerTokenAccount: ata, solVault: m.svA,
-            systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+            config: configPda,
+            config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have thrown");
@@ -275,7 +306,7 @@ describe("duel - edge cases & security", () => {
         .accounts({
           resolver: creator.publicKey, market: m.market, sideA: m.sideA, sideB: m.sideB,
           solVaultA: m.svA, solVaultB: m.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
           systemProgram: SystemProgram.programId,
         })
         .rpc();
@@ -287,7 +318,7 @@ describe("duel - edge cases & security", () => {
           .accounts({
             resolver: creator.publicKey, market: m.market, sideA: m.sideA, sideB: m.sideB,
             solVaultA: m.svA, solVaultB: m.svB,
-            protocolFeeAccount: protocolFeeAccount.publicKey,
+            protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
             systemProgram: SystemProgram.programId,
           })
           .rpc();
@@ -305,7 +336,7 @@ describe("duel - edge cases & security", () => {
           .accounts({
             buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
             tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
-            systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+            config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have thrown");
@@ -323,7 +354,7 @@ describe("duel - edge cases & security", () => {
           .accounts({
             seller: creator.publicKey, market: m.market, sideAccount: m.sideA,
             tokenMint: m.mintA, tokenVault: m.tvA, sellerTokenAccount: ata, solVault: m.svA,
-            systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+            config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have thrown");
@@ -352,7 +383,7 @@ describe("duel - edge cases & security", () => {
         .accounts({
           seller: creator.publicKey, market: m.market, sideAccount: m.sideA,
           tokenMint: m.mintA, tokenVault: m.tvA, sellerTokenAccount: ataA, solVault: m.svA,
-          systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+          config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -369,7 +400,7 @@ describe("duel - edge cases & security", () => {
         .accounts({
           buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
           tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ataA, solVault: m.svA,
-          systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+          config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -399,7 +430,7 @@ describe("duel - edge cases & security", () => {
           .accounts({
             buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
             tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
-            systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+            config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have thrown");
@@ -525,7 +556,7 @@ describe("duel - edge cases & security", () => {
         .accounts({
           resolver: creator.publicKey, market: m.market, sideA: m.sideA, sideB: m.sideB,
           solVaultA: m.svA, solVaultB: m.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
           systemProgram: SystemProgram.programId,
         })
         .rpc();
@@ -543,7 +574,7 @@ describe("duel - edge cases & security", () => {
         .accounts({
           seller: creator.publicKey, market: m.market, sideAccount: m.sideB,
           tokenMint: m.mintB, tokenVault: m.tvB, sellerTokenAccount: atB, solVault: m.svB,
-          systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+          config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 

@@ -33,6 +33,30 @@ describe("duel - capital efficiency & battle testing", () => {
   const program = anchor.workspace.Duel as Program<Duel>;
   const creator = provider.wallet;
   const protocolFeeAccount = Keypair.generate();
+  const [configPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("config")],
+    program.programId
+  );
+
+  before(async () => {
+    try {
+      await program.account.programConfig.fetch(configPda);
+    } catch {
+      const tx = new anchor.web3.Transaction().add(
+        SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: protocolFeeAccount.publicKey, lamports: 890_880 })
+      );
+      await provider.sendAndConfirm(tx);
+      await program.methods
+        .initializeConfig(125, new BN(0))
+        .accounts({
+          admin: creator.publicKey,
+          config: configPda,
+          protocolFeeAccount: protocolFeeAccount.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    }
+  });
 
   let marketCounter = Math.floor(Math.random() * 1_000_000) + 100_000; // random offset to avoid PDA collisions on persistent validator
 
@@ -95,6 +119,9 @@ describe("duel - capital efficiency & battle testing", () => {
         curveParams, totalSupply,
         "Test A", "TA", "", "Test B", "TB", "",
         { unlocked: {} },
+        new BN(0),  // maxObservationChangePerUpdate
+        0,          // minTwapSpreadBps
+        0,          // creatorFeeBps
       )
       .accountsStrict({
         creator: creator.publicKey,
@@ -102,7 +129,7 @@ describe("duel - capital efficiency & battle testing", () => {
         tokenMintA: pdas.mintA, tokenMintB: pdas.mintB,
         tokenVaultA: pdas.tvA, tokenVaultB: pdas.tvB,
         solVaultA: pdas.svA, solVaultB: pdas.svB,
-        protocolFeeAccount: protocolFeeAccount.publicKey,
+        protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
         metadataA: findMetadataPda(pdas.mintA),
         metadataB: findMetadataPda(pdas.mintB),
         tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
@@ -147,7 +174,7 @@ describe("duel - capital efficiency & battle testing", () => {
       .accountsStrict({
         buyer: payer, market: pdas.market, sideAccount,
         tokenMint: mint, tokenVault, buyerTokenAccount: ata, solVault,
-        systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+        config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
       });
 
     if (buyer) {
@@ -175,7 +202,7 @@ describe("duel - capital efficiency & battle testing", () => {
     const accounts = {
       seller: creator.publicKey, market: pdas.market, sideAccount,
       tokenMint: mint, tokenVault, sellerTokenAccount: ata, solVault,
-      systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+      config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
     };
 
     if (postResolution) {
@@ -407,7 +434,7 @@ describe("duel - capital efficiency & battle testing", () => {
           resolver: creator.publicKey, market: pdas.market,
           sideA: pdas.sideA, sideB: pdas.sideB,
           solVaultA: pdas.svA, solVaultB: pdas.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
           systemProgram: SystemProgram.programId,
         })
         .rpc();
@@ -462,7 +489,7 @@ describe("duel - capital efficiency & battle testing", () => {
           resolver: creator.publicKey, market: pdas.market,
           sideA: pdas.sideA, sideB: pdas.sideB,
           solVaultA: pdas.svA, solVaultB: pdas.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
           systemProgram: SystemProgram.programId,
         })
         .rpc();
@@ -773,7 +800,7 @@ describe("duel - capital efficiency & battle testing", () => {
           resolver: creator.publicKey, market: pdas.market,
           sideA: pdas.sideA, sideB: pdas.sideB,
           solVaultA: pdas.svA, solVaultB: pdas.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
           systemProgram: SystemProgram.programId,
         })
         .rpc();
@@ -866,7 +893,7 @@ describe("duel - capital efficiency & battle testing", () => {
             buyer: creator.publicKey, market: pdas.market,
             sideAccount: pdas.sideB, // WRONG: side B account for side=0
             tokenMint: pdas.mintA, tokenVault: pdas.tvA, buyerTokenAccount: ata, solVault: pdas.svA,
-            systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+            config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have rejected mismatched side");
@@ -894,7 +921,7 @@ describe("duel - capital efficiency & battle testing", () => {
             seller: creator.publicKey, market: pdas2.market, // WRONG market
             sideAccount: pdas2.sideA,
             tokenMint: pdas1.mintA, tokenVault: pdas2.tvA, sellerTokenAccount: ata, solVault: pdas2.svA,
-            systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+            config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have rejected cross-market sell");
@@ -913,7 +940,7 @@ describe("duel - capital efficiency & battle testing", () => {
             resolver: creator.publicKey, market: pdas.market,
             sideA: pdas.sideA, sideB: pdas.sideB,
             solVaultA: pdas.svA, solVaultB: pdas.svB,
-            protocolFeeAccount: protocolFeeAccount.publicKey,
+            protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
             systemProgram: SystemProgram.programId,
           })
           .rpc();
@@ -956,6 +983,9 @@ describe("duel - capital efficiency & battle testing", () => {
           new BN(1_000_000_000),
           "CU Test A", "CUA", "", "CU Test B", "CUB", "",
           { unlocked: {} },
+          new BN(0),  // maxObservationChangePerUpdate
+          0,          // minTwapSpreadBps
+          0,          // creatorFeeBps
         )
         .accountsStrict({
           creator: creator.publicKey,
@@ -963,7 +993,7 @@ describe("duel - capital efficiency & battle testing", () => {
           tokenMintA: pdas.mintA, tokenMintB: pdas.mintB,
           tokenVaultA: pdas.tvA, tokenVaultB: pdas.tvB,
           solVaultA: pdas.svA, solVaultB: pdas.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
           metadataA: findMetadataPda(pdas.mintA),
           metadataB: findMetadataPda(pdas.mintB),
           tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
@@ -989,7 +1019,7 @@ describe("duel - capital efficiency & battle testing", () => {
           buyer: creator.publicKey, market: pdas.market,
           sideAccount: pdas.sideA, tokenMint: pdas.mintA, tokenVault: pdas.tvA,
           buyerTokenAccount: ataA, solVault: pdas.svA,
-          systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+          config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -1011,7 +1041,7 @@ describe("duel - capital efficiency & battle testing", () => {
           seller: creator.publicKey, market: pdas.market,
           sideAccount: pdas.sideA, tokenMint: pdas.mintA, tokenVault: pdas.tvA,
           sellerTokenAccount: ataA, solVault: pdas.svA,
-          systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+          config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -1040,7 +1070,7 @@ describe("duel - capital efficiency & battle testing", () => {
           resolver: creator.publicKey, market: pdas.market,
           sideA: pdas.sideA, sideB: pdas.sideB,
           solVaultA: pdas.svA, solVaultB: pdas.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
           systemProgram: SystemProgram.programId,
         })
         .rpc();
@@ -1060,7 +1090,7 @@ describe("duel - capital efficiency & battle testing", () => {
           seller: creator.publicKey, market: pdas.market,
           sideAccount: pdas.sideA, tokenMint: pdas.mintA, tokenVault: pdas.tvA,
           sellerTokenAccount: ataA, solVault: pdas.svA,
-          systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+          config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -1180,7 +1210,7 @@ describe("duel - capital efficiency & battle testing", () => {
           resolver: creator.publicKey, market: pdas.market,
           sideA: pdas.sideA, sideB: pdas.sideB,
           solVaultA: pdas.svA, solVaultB: pdas.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
           systemProgram: SystemProgram.programId,
         })
         .rpc();
@@ -1222,7 +1252,7 @@ describe("duel - capital efficiency & battle testing", () => {
           resolver: creator.publicKey, market: pdas.market,
           sideA: pdas.sideA, sideB: pdas.sideB,
           solVaultA: pdas.svA, solVaultB: pdas.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
           systemProgram: SystemProgram.programId,
         })
         .rpc();
@@ -1399,7 +1429,7 @@ describe("duel - capital efficiency & battle testing", () => {
           resolver: creator.publicKey, market: pdas.market,
           sideA: pdas.sideA, sideB: pdas.sideB,
           solVaultA: pdas.svA, solVaultB: pdas.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
           systemProgram: SystemProgram.programId,
         })
         .rpc();
@@ -1483,7 +1513,7 @@ describe("duel - capital efficiency & battle testing", () => {
           resolver: creator.publicKey, market: pdas.market,
           sideA: pdas.sideA, sideB: pdas.sideB,
           solVaultA: pdas.svA, solVaultB: pdas.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
           systemProgram: SystemProgram.programId,
         })
         .rpc();

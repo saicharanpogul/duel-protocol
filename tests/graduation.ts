@@ -44,6 +44,31 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
   const program = anchor.workspace.Duel as Program<Duel>;
   const creator = provider.wallet;
   const protocolFeeAccount = Keypair.generate();
+  const [configPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("config")],
+    program.programId
+  );
+
+  before(async () => {
+    try {
+      await program.account.programConfig.fetch(configPda);
+    } catch {
+      // Pre-fund fee account and init config
+      const tx = new anchor.web3.Transaction().add(
+        SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: protocolFeeAccount.publicKey, lamports: 890_880 })
+      );
+      await provider.sendAndConfirm(tx);
+      await program.methods
+        .initializeConfig(125, new BN(0))
+        .accounts({
+          admin: creator.publicKey,
+          config: configPda,
+          protocolFeeAccount: protocolFeeAccount.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    }
+  });
 
   let marketCounter = Math.floor(Math.random() * 10_000_000) + 5_000_000;
 
@@ -122,6 +147,9 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
         new BN(1_000_000_000),
         "Grad A", "GA", "", "Grad B", "GB", "",
         { unlocked: {} },
+        new BN(0),  // maxObservationChangePerUpdate
+        0,          // minTwapSpreadBps
+        0,          // creatorFeeBps
       )
       .accountsStrict({
         creator: creator.publicKey,
@@ -130,7 +158,7 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
         tokenMintA: pdas.mintA, tokenMintB: pdas.mintB,
         tokenVaultA: pdas.tvA, tokenVaultB: pdas.tvB,
         solVaultA: pdas.svA, solVaultB: pdas.svB,
-        protocolFeeAccount: protocolFeeAccount.publicKey,
+        protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
         metadataA: findMetadataPda(pdas.mintA),
         metadataB: findMetadataPda(pdas.mintB),
         tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
@@ -166,6 +194,7 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
         tokenVault,
         buyerTokenAccount: ata,
         solVault,
+        config: configPda,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
@@ -297,7 +326,7 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
           resolver: creator.publicKey, market: pdas.market,
           sideA: pdas.sideA, sideB: pdas.sideB,
           solVaultA: pdas.svA, solVaultB: pdas.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
           systemProgram: SystemProgram.programId,
         }).rpc();
 
@@ -324,6 +353,7 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
             tokenVault: pdas.tvA,
             sellerTokenAccount: ataA,
             solVault: pdas.svA,
+            config: configPda,
             systemProgram: SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
           })
