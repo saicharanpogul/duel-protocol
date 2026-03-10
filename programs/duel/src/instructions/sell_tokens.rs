@@ -49,6 +49,14 @@ pub struct SellTokens<'info> {
     )]
     pub sol_vault: Account<'info, SolVault>,
 
+    /// Protocol config (pause check)
+    #[account(
+        seeds = [b"config"],
+        bump = config.bump,
+        constraint = !config.paused @ DuelError::ProtocolPaused,
+    )]
+    pub config: Account<'info, ProgramConfig>,
+
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
 }

@@ -1,7 +1,9 @@
 pub mod market;
+pub mod program_config;
 pub mod side;
 
 pub use market::*;
+pub use program_config::*;
 pub use side::*;
 
 use anchor_lang::prelude::*;

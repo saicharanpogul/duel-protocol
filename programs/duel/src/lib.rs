@@ -16,6 +16,23 @@ use instructions::*;
 pub mod duel {
     use super::*;
 
+    pub fn initialize_config(
+        ctx: Context<InitializeConfig>,
+        default_protocol_fee_bps: u16,
+        market_creation_fee: u64,
+    ) -> Result<()> {
+        instructions::initialize_config::handler(ctx, default_protocol_fee_bps, market_creation_fee)
+    }
+
+    pub fn update_config(
+        ctx: Context<UpdateConfig>,
+        paused: Option<bool>,
+        default_protocol_fee_bps: Option<u16>,
+        market_creation_fee: Option<u64>,
+    ) -> Result<()> {
+        instructions::update_config::handler(ctx, paused, default_protocol_fee_bps, market_creation_fee)
+    }
+
     pub fn initialize_market(
         ctx: Context<InitializeMarket>,
         market_id: u64,
