@@ -161,4 +161,11 @@ pub mod duel {
     ) -> Result<()> {
         instructions::close_position::handler(ctx, side)
     }
+
+    pub fn close_market(
+        ctx: Context<CloseMarket>,
+        side: u8,
+    ) -> Result<()> {
+        instructions::close_market::handler(ctx, side)
+    }
 }
