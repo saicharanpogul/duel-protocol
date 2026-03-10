@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
+use anchor_spl::token_interface::{self, Mint, MintTo, TokenAccount, TokenInterface};
 
 use crate::constants::*;
 use crate::cpi::metaplex_metadata;
@@ -45,40 +45,44 @@ pub struct InitializeMarket<'info> {
         payer = creator,
         mint::decimals = 6,
         mint::authority = market,
+        mint::token_program = token_program,
         seeds = [b"mint", market.key().as_ref(), &[0u8]],
         bump,
     )]
-    pub token_mint_a: Box<Account<'info, Mint>>,
+    pub token_mint_a: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         init,
         payer = creator,
         mint::decimals = 6,
         mint::authority = market,
+        mint::token_program = token_program,
         seeds = [b"mint", market.key().as_ref(), &[1u8]],
         bump,
     )]
-    pub token_mint_b: Box<Account<'info, Mint>>,
+    pub token_mint_b: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         init,
         payer = creator,
         token::mint = token_mint_a,
         token::authority = market,
+        token::token_program = token_program,
         seeds = [b"token_vault", market.key().as_ref(), &[0u8]],
         bump,
     )]
-    pub token_vault_a: Box<Account<'info, TokenAccount>>,
+    pub token_vault_a: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         init,
         payer = creator,
         token::mint = token_mint_b,
         token::authority = market,
+        token::token_program = token_program,
         seeds = [b"token_vault", market.key().as_ref(), &[1u8]],
         bump,
     )]
-    pub token_vault_b: Box<Account<'info, TokenAccount>>,
+    pub token_vault_b: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// SOL vault for Side A (program-owned PDA)
     #[account(
@@ -132,7 +136,7 @@ pub struct InitializeMarket<'info> {
     pub token_metadata_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
     pub rent: Sysvar<'info, Rent>,
 }
 
@@ -252,7 +256,7 @@ pub fn handler(
     ]];
 
     // Mint Side A tokens
-    token::mint_to(
+    token_interface::mint_to(
         CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             MintTo {
@@ -266,7 +270,7 @@ pub fn handler(
     )?;
 
     // Mint Side B tokens
-    token::mint_to(
+    token_interface::mint_to(
         CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             MintTo {

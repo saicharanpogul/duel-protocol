@@ -217,6 +217,7 @@ describe("duel", () => {
           buyer: creator.publicKey,
           market: marketPda,
           sideAccount: sideAPda,
+          tokenMint: mintA,
           tokenVault: tokenVaultA,
           buyerTokenAccount: buyerTokenAccountA,
           solVault: solVaultA,
@@ -258,6 +259,7 @@ describe("duel", () => {
           seller: creator.publicKey,
           market: marketPda,
           sideAccount: sideAPda,
+          tokenMint: mintA,
           tokenVault: tokenVaultA,
           sellerTokenAccount: buyerTokenAccountA,
           solVault: solVaultA,
@@ -299,6 +301,7 @@ describe("duel", () => {
           buyer: creator.publicKey,
           market: marketPda,
           sideAccount: sideBPda,
+          tokenMint: mintB,
           tokenVault: tokenVaultB,
           buyerTokenAccount: buyerTokenAccountB,
           solVault: solVaultB,
@@ -366,6 +369,7 @@ describe("duel", () => {
             seller: creator.publicKey,
             market: marketPda,
             sideAccount: sideAPda,
+            tokenMint: mintA,
             tokenVault: tokenVaultA,
             sellerTokenAccount: buyerTokenAccountA,
             solVault: solVaultA,
@@ -468,7 +472,7 @@ describe("duel", () => {
         .buyTokens(0, new BN(2 * LAMPORTS_PER_SOL), new BN(1))
         .accounts({
           buyer: creator.publicKey, market: m, sideAccount: sA,
-          tokenVault: tvA, buyerTokenAccount: btA, solVault: svA,
+          tokenMint: mA, tokenVault: tvA, buyerTokenAccount: btA, solVault: svA,
           systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
@@ -478,7 +482,7 @@ describe("duel", () => {
         .buyTokens(1, new BN(LAMPORTS_PER_SOL / 2), new BN(1))
         .accounts({
           buyer: creator.publicKey, market: m, sideAccount: sB,
-          tokenVault: tvB, buyerTokenAccount: btB, solVault: svB,
+          tokenMint: mB, tokenVault: tvB, buyerTokenAccount: btB, solVault: svB,
           systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
@@ -534,7 +538,7 @@ describe("duel", () => {
         .sellPostResolution(0, tokenAmount, new BN(1))
         .accounts({
           seller: creator.publicKey, market: m, sideAccount: sA,
-          tokenVault: tvA, sellerTokenAccount: btA, solVault: svA,
+          tokenMint: mA, tokenVault: tvA, sellerTokenAccount: btA, solVault: svA,
           systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();

@@ -154,7 +154,7 @@ describe("duel - edge cases & security", () => {
       .buyTokens(side, solAmount, new BN(1))
       .accounts({
         buyer: creator.publicKey, market, sideAccount,
-        tokenVault, buyerTokenAccount: ata, solVault,
+        tokenMint: mint, tokenVault, buyerTokenAccount: ata, solVault,
         systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
       })
       .rpc();
@@ -185,7 +185,7 @@ describe("duel - edge cases & security", () => {
           .buyTokens(2, new BN(LAMPORTS_PER_SOL), new BN(1))
           .accounts({
             buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
-            tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
+            tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
             systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
@@ -233,7 +233,7 @@ describe("duel - edge cases & security", () => {
           .sellTokens(0, new BN(0), new BN(0))
           .accounts({
             seller: creator.publicKey, market: m.market, sideAccount: m.sideA,
-            tokenVault: m.tvA, sellerTokenAccount: ata, solVault: m.svA,
+            tokenMint: m.mintA, tokenVault: m.tvA, sellerTokenAccount: ata, solVault: m.svA,
             systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
@@ -304,7 +304,7 @@ describe("duel - edge cases & security", () => {
           .buyTokens(0, new BN(LAMPORTS_PER_SOL), new BN(1))
           .accounts({
             buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
-            tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
+            tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
             systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
@@ -322,7 +322,7 @@ describe("duel - edge cases & security", () => {
           .sellTokens(0, new BN(1), new BN(0))
           .accounts({
             seller: creator.publicKey, market: m.market, sideAccount: m.sideA,
-            tokenVault: m.tvA, sellerTokenAccount: ata, solVault: m.svA,
+            tokenMint: m.mintA, tokenVault: m.tvA, sellerTokenAccount: ata, solVault: m.svA,
             systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
@@ -351,7 +351,7 @@ describe("duel - edge cases & security", () => {
         .sellTokens(0, allTokens, new BN(1))
         .accounts({
           seller: creator.publicKey, market: m.market, sideAccount: m.sideA,
-          tokenVault: m.tvA, sellerTokenAccount: ataA, solVault: m.svA,
+          tokenMint: m.mintA, tokenVault: m.tvA, sellerTokenAccount: ataA, solVault: m.svA,
           systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
@@ -368,7 +368,7 @@ describe("duel - edge cases & security", () => {
         .buyTokens(0, new BN(LAMPORTS_PER_SOL / 2), new BN(1))
         .accounts({
           buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
-          tokenVault: m.tvA, buyerTokenAccount: ataA, solVault: m.svA,
+          tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ataA, solVault: m.svA,
           systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
@@ -398,7 +398,7 @@ describe("duel - edge cases & security", () => {
           .buyTokens(0, new BN(1000), new BN(999_999_999))
           .accounts({
             buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
-            tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
+            tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
             systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
@@ -542,7 +542,7 @@ describe("duel - edge cases & security", () => {
         .sellPostResolution(1, tokenAmount, new BN(0))
         .accounts({
           seller: creator.publicKey, market: m.market, sideAccount: m.sideB,
-          tokenVault: m.tvB, sellerTokenAccount: atB, solVault: m.svB,
+          tokenMint: m.mintB, tokenVault: m.tvB, sellerTokenAccount: atB, solVault: m.svB,
           systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();

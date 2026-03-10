@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::token_interface::{self, TokenAccount, TokenInterface, TransferChecked, Mint};
 
 use crate::errors::DuelError;
 use crate::events::TokensBought;
@@ -26,16 +26,22 @@ pub struct BuyTokens<'info> {
     )]
     pub side_account: Account<'info, Side>,
 
+    /// Token mint for the selected side (needed for transfer_checked)
+    #[account(
+        constraint = token_mint.key() == side_account.token_mint @ DuelError::InvalidSide,
+    )]
+    pub token_mint: InterfaceAccount<'info, Mint>,
+
     /// Token vault for the selected side
     #[account(
         mut,
         constraint = token_vault.key() == side_account.token_reserve_vault @ DuelError::InvalidSide,
     )]
-    pub token_vault: Account<'info, TokenAccount>,
+    pub token_vault: InterfaceAccount<'info, TokenAccount>,
 
     /// Buyer's token account for the selected side
     #[account(mut)]
-    pub buyer_token_account: Account<'info, TokenAccount>,
+    pub buyer_token_account: InterfaceAccount<'info, TokenAccount>,
 
     /// SOL vault for the selected side
     #[account(
@@ -45,7 +51,7 @@ pub struct BuyTokens<'info> {
     pub sol_vault: Account<'info, SolVault>,
 
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 pub fn handler(
@@ -97,17 +103,21 @@ pub fn handler(
         &[bump],
     ]];
 
-    token::transfer(
+    let decimals = ctx.accounts.token_mint.decimals;
+
+    token_interface::transfer_checked(
         CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
-            Transfer {
+            TransferChecked {
                 from: ctx.accounts.token_vault.to_account_info(),
+                mint: ctx.accounts.token_mint.to_account_info(),
                 to: ctx.accounts.buyer_token_account.to_account_info(),
                 authority: ctx.accounts.market.to_account_info(),
             },
             signer_seeds,
         ),
         tokens,
+        decimals,
     )?;
 
     // Update side state

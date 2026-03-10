@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, CloseAccount};
+use anchor_spl::token_interface::{self, TokenAccount, TokenInterface, CloseAccount};
 
 use crate::errors::DuelError;
 use crate::state::*;
@@ -35,14 +35,14 @@ pub struct CloseSolVault<'info> {
         mut,
         constraint = token_vault.key() == side_account.token_reserve_vault @ DuelError::InvalidSide,
     )]
-    pub token_vault: Account<'info, TokenAccount>,
+    pub token_vault: InterfaceAccount<'info, TokenAccount>,
 
     /// Receives rent from closed accounts
     /// CHECK: Any account can receive rent
     #[account(mut)]
     pub rent_receiver: UncheckedAccount<'info>,
 
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 pub fn handler(ctx: Context<CloseSolVault>, side: u8) -> Result<()> {
@@ -72,7 +72,7 @@ pub fn handler(ctx: Context<CloseSolVault>, side: u8) -> Result<()> {
             &[bump],
         ]];
 
-        token::close_account(CpiContext::new_with_signer(
+        token_interface::close_account(CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             CloseAccount {
                 account: ctx.accounts.token_vault.to_account_info(),

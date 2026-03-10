@@ -146,7 +146,7 @@ describe("duel - capital efficiency & battle testing", () => {
       .buyTokens(side, solAmount, new BN(1))
       .accountsStrict({
         buyer: payer, market: pdas.market, sideAccount,
-        tokenVault, buyerTokenAccount: ata, solVault,
+        tokenMint: mint, tokenVault, buyerTokenAccount: ata, solVault,
         systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
       });
 
@@ -174,7 +174,7 @@ describe("duel - capital efficiency & battle testing", () => {
 
     const accounts = {
       seller: creator.publicKey, market: pdas.market, sideAccount,
-      tokenVault, sellerTokenAccount: ata, solVault,
+      tokenMint: mint, tokenVault, sellerTokenAccount: ata, solVault,
       systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
     };
 

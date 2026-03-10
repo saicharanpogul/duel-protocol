@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::AccountMeta;
-use anchor_spl::token::TokenAccount;
+use anchor_spl::token_interface::TokenAccount;
 
 use crate::cpi::meteora_damm::{self, RemoveLiquidityParams};
 use crate::errors::DuelError;
@@ -52,11 +52,11 @@ pub struct RemoveLiquidity<'info> {
 
     /// Token A account to receive withdrawn tokens
     #[account(mut)]
-    pub token_a_account: Account<'info, TokenAccount>,
+    pub token_a_account: InterfaceAccount<'info, TokenAccount>,
 
     /// Token B account to receive withdrawn WSOL
     #[account(mut)]
-    pub token_b_account: Account<'info, TokenAccount>,
+    pub token_b_account: InterfaceAccount<'info, TokenAccount>,
 
     /// CHECK: Validated by Meteora
     #[account(mut)]

@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::AccountMeta;
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use anchor_spl::associated_token::AssociatedToken;
 
 use crate::cpi::meteora_damm;
@@ -35,14 +35,14 @@ pub struct GraduateToDex<'info> {
         mut,
         constraint = token_mint.key() == side_account.token_mint @ DuelError::InvalidSide,
     )]
-    pub token_mint: Account<'info, Mint>,
+    pub token_mint: InterfaceAccount<'info, Mint>,
 
     /// Token vault for this side (source of tokens to seed pool)
     #[account(
         mut,
         constraint = token_vault.key() == side_account.token_reserve_vault @ DuelError::InvalidSide,
     )]
-    pub token_vault: Account<'info, TokenAccount>,
+    pub token_vault: InterfaceAccount<'info, TokenAccount>,
 
     /// SOL vault — checked for minimum reserve
     #[account(
@@ -104,7 +104,7 @@ pub struct GraduateToDex<'info> {
     #[account(mut)]
     pub payer_token_b: UncheckedAccount<'info>,
 
-    /// Token A's token program (SPL Token for regular mints)
+    /// Token A's token program (SPL Token or Token-2022)
     /// CHECK: Validated by Meteora program
     pub token_a_program: UncheckedAccount<'info>,
 
@@ -130,7 +130,7 @@ pub struct GraduateToDex<'info> {
     )]
     pub meteora_program: UncheckedAccount<'info>,
 
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
@@ -167,27 +167,29 @@ pub fn handler(ctx: Context<GraduateToDex>, side: u8) -> Result<()> {
         &[bump],
     ]];
 
-    // ─── Transfer tokens from token vault to payer_token_a (authority's ATA) ───
-    // Uses market PDA as authority (it owns the token vault)
-    anchor_spl::token::transfer(
+    // ─── Transfer tokens from token vault to payer_token_a ───
+    // Uses token_interface::transfer_checked for Token-2022 compat
+    let decimals = ctx.accounts.token_mint.decimals;
+
+    anchor_spl::token_interface::transfer_checked(
         CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
-            anchor_spl::token::Transfer {
+            anchor_spl::token_interface::TransferChecked {
                 from: ctx.accounts.token_vault.to_account_info(),
+                mint: ctx.accounts.token_mint.to_account_info(),
                 to: ctx.accounts.payer_token_a.to_account_info(),
                 authority: ctx.accounts.market.to_account_info(),
             },
             signer_seeds,
         ),
         tokens_available,
+        decimals,
     )?;
 
     // Client is expected to pre-fund payer_token_b (WSOL ATA) with SOL from their wallet.
     // After the Meteora CPI, the program refunds sol_vault balance to authority.
 
     // ─── Compute sqrt_price for the pool ───
-    // sqrt_price in Q64.64 = sqrt(token_b_amount / token_a_amount) * 2^64
-    // For now, use a simple price based on the seed ratio
     let sqrt_price = compute_sqrt_price_q64(available_sol, tokens_available);
 
     // Use max liquidity from the seed amounts
@@ -200,8 +202,6 @@ pub fn handler(ctx: Context<GraduateToDex>, side: u8) -> Result<()> {
     );
 
     // Build Meteora CPI account metas (19 accounts)
-    //   - creator = market PDA (owns the position NFT)
-    //   - payer = authority (wallet, system-owned, signs + pays rent)
     let account_metas = vec![
         AccountMeta::new_readonly(market_key, true),                             // 0: creator (market PDA, signer)
         AccountMeta::new(ctx.accounts.position_nft_mint.key(), true),            // 1: position_nft_mint (signer)
@@ -254,8 +254,6 @@ pub fn handler(ctx: Context<GraduateToDex>, side: u8) -> Result<()> {
     )?;
 
     // ─── Refund SOL vault balance to authority ───
-    // The authority fronted SOL (wrapped as WSOL) for the pool.
-    // Reimburse them with the available SOL from the vault.
     let refund_amount = available_sol;
     **ctx.accounts.sol_vault.to_account_info().try_borrow_mut_lamports()? -= refund_amount;
     **ctx.accounts.authority.to_account_info().try_borrow_mut_lamports()? += refund_amount;
@@ -284,17 +282,13 @@ fn compute_sqrt_price_q64(sol_amount: u64, token_amount: u64) -> u128 {
     if token_amount == 0 || sol_amount == 0 {
         return 1u128 << 64; // Default to 1.0
     }
-    // price = sol / tokens (price of tokenA in tokenB terms)
-    // sqrt_price = sqrt(price) * 2^64
     let price_f = (sol_amount as f64) / (token_amount as f64);
     let sqrt_price_f = price_f.sqrt();
     (sqrt_price_f * ((1u128 << 64) as f64)) as u128
 }
 
 /// Compute initial liquidity from seed amounts and sqrt_price
-/// L = token_a_amount * sqrt_price / 2^64 (simplified)
 fn compute_initial_liquidity(sol_amount: u64, token_amount: u64, sqrt_price: u128) -> u128 {
-    // L ≈ min(token_a * sqrt_price, token_b / sqrt_price) in Q64
     let l_from_a = (token_amount as u128)
         .checked_mul(sqrt_price)
         .unwrap_or(u128::MAX)

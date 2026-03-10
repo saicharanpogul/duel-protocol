@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::AccountMeta;
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token_interface::{TokenAccount, TokenInterface};
 
 use crate::cpi::meteora_damm;
 use crate::errors::DuelError;
@@ -52,11 +52,11 @@ pub struct ClaimPoolFees<'info> {
 
     /// Fee receiver's token A account (receives claimed token fees)
     #[account(mut)]
-    pub fee_receiver_token_a: Account<'info, TokenAccount>,
+    pub fee_receiver_token_a: InterfaceAccount<'info, TokenAccount>,
 
     /// Fee receiver's token B account (receives claimed WSOL fees)
     #[account(mut)]
-    pub fee_receiver_token_b: Account<'info, TokenAccount>,
+    pub fee_receiver_token_b: InterfaceAccount<'info, TokenAccount>,
 
     /// Pool's token A vault
     /// CHECK: Validated by Meteora program
@@ -91,7 +91,7 @@ pub struct ClaimPoolFees<'info> {
     )]
     pub meteora_program: UncheckedAccount<'info>,
 
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 pub fn handler(ctx: Context<ClaimPoolFees>, side: u8) -> Result<()> {
