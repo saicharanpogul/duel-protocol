@@ -1,0 +1,361 @@
+/* ─── Docs page: Jupiter/Meteora-style white theme ─── */
+
+.docs-page {
+  background: #FFFFFF;
+  color: #111827;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  min-height: 100vh;
+}
+
+/* ─── Navigation ─── */
+.docs-nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid #E5E7EB;
+  padding: 0 2rem;
+}
+.docs-nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+}
+.docs-nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: #111827;
+}
+.docs-nav-logo-text {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.docs-nav-logo-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #06B6D4, #8B5CF6);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+.docs-nav-links {
+  display: flex;
+  gap: 32px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.docs-nav-links a {
+  color: #6B7280;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: color 0.2s;
+}
+.docs-nav-links a:hover {
+  color: #111827;
+}
+
+/* ─── Hero ─── */
+.docs-hero {
+  text-align: center;
+  padding: 100px 2rem 60px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+.docs-hero h1 {
+  font-size: 3.5rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  margin: 0 0 20px;
+  background: linear-gradient(135deg, #111827, #06B6D4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.docs-hero p {
+  font-size: 1.2rem;
+  color: #6B7280;
+  line-height: 1.6;
+  margin: 0;
+}
+.docs-hero-badges {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 28px;
+  flex-wrap: wrap;
+}
+.docs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1px solid #E5E7EB;
+  color: #374151;
+  background: #F9FAFB;
+}
+.docs-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10B981;
+  animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ─── Sections ─── */
+.docs-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 80px 2rem;
+}
+.docs-section-header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+.docs-section-header h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin: 0 0 12px;
+}
+.docs-section-header p {
+  font-size: 1rem;
+  color: #6B7280;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* ─── Flow Diagram ─── */
+.flow-container {
+  background: #0F172A;
+  border-radius: 16px;
+  padding: 40px;
+  overflow: hidden;
+  position: relative;
+}
+.flow-container svg {
+  width: 100%;
+  height: auto;
+}
+
+/* Flow node styling */
+.flow-node {
+  transition: transform 0.3s ease, filter 0.3s ease;
+  cursor: pointer;
+}
+.flow-node:hover {
+  filter: brightness(1.2);
+}
+.flow-node rect, .flow-node-box {
+  rx: 8;
+  ry: 8;
+  transition: stroke 0.3s ease;
+}
+.flow-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  fill: white;
+}
+.flow-sublabel {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  fill: #94A3B8;
+}
+.flow-line {
+  stroke-dasharray: 200;
+  stroke-dashoffset: 200;
+  animation: dash-draw 2s ease forwards;
+}
+.flow-line-dashed {
+  stroke-dasharray: 6 4;
+}
+@keyframes dash-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Flow legend */
+.flow-legend {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #1E293B;
+}
+.flow-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: #94A3B8;
+}
+.flow-legend-line {
+  width: 24px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+/* ─── Feature Cards ─── */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+@media (max-width: 768px) {
+  .feature-grid { grid-template-columns: 1fr; }
+}
+.feature-card {
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 28px;
+  transition: border-color 0.3s, box-shadow 0.3s, transform 0.2s;
+  background: white;
+}
+.feature-card:hover {
+  border-color: #06B6D4;
+  box-shadow: 0 4px 24px rgba(6, 182, 212, 0.1);
+  transform: translateY(-2px);
+}
+.feature-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+}
+.feature-card h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
+}
+.feature-card p {
+  font-size: 0.9rem;
+  color: #6B7280;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ─── SDK Instruction Table ─── */
+.sdk-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+}
+.sdk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.sdk-table th {
+  text-align: left;
+  padding: 14px 20px;
+  background: #F9FAFB;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #E5E7EB;
+  white-space: nowrap;
+}
+.sdk-table td {
+  padding: 12px 20px;
+  border-bottom: 1px solid #F3F4F6;
+  color: #4B5563;
+}
+.sdk-table tr:last-child td {
+  border-bottom: none;
+}
+.sdk-table tr:hover td {
+  background: #F9FAFB;
+}
+.sdk-table code {
+  font-size: 0.85rem;
+  background: #F3F4F6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  color: #06B6D4;
+}
+
+/* ─── Code Block ─── */
+.code-block {
+  background: #0F172A;
+  border-radius: 12px;
+  padding: 24px;
+  overflow-x: auto;
+  margin-top: 24px;
+}
+.code-block pre {
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: #E2E8F0;
+}
+.code-block .code-keyword { color: #C084FC; }
+.code-block .code-string { color: #34D399; }
+.code-block .code-comment { color: #64748B; }
+.code-block .code-number { color: #F59E0B; }
+
+/* ─── Architecture Section ─── */
+.arch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-top: 32px;
+}
+@media (max-width: 768px) {
+  .arch-grid { grid-template-columns: 1fr; }
+}
+.arch-card {
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 24px;
+  background: white;
+}
+.arch-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.arch-card-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+.arch-card p {
+  font-size: 0.9rem;
+  color: #6B7280;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ─── Footer ─── */
+.docs-footer {
+  border-top: 1px solid #E5E7EB;
+  padding: 32px 2rem;
+  text-align: center;
+  color: #9CA3AF;
+  font-size: 0.85rem;
+}
