@@ -36,6 +36,7 @@ describe("duel - edge cases & security", () => {
 
   const curveParams = { a: new BN(1_000_000), n: 1, b: new BN(1_000) };
   const totalSupply = new BN(1_000_000_000);
+  const edgeBase = Math.floor(Math.random() * 10_000_000) + 40_000_000; // random offset for persistent validator
   const protocolFeeAccount = Keypair.generate();
   let configPda: PublicKey;
 
@@ -143,7 +144,8 @@ describe("duel - edge cases & security", () => {
         tokenMintA: mintA, tokenMintB: mintB,
         tokenVaultA: tvA, tokenVaultB: tvB,
         solVaultA: svA, solVaultB: svB,
-        protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
+        protocolFeeAccount: protocolFeeAccount.publicKey,
+        config: configPda,
         metadataA: findMetadataPda(mintA),
         metadataB: findMetadataPda(mintB),
         tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
@@ -182,7 +184,6 @@ describe("duel - edge cases & security", () => {
       .accounts({
         buyer: creator.publicKey, market, sideAccount,
         tokenMint: mint, tokenVault, buyerTokenAccount: ata, solVault,
-        config: configPda,
         config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
       })
       .rpc();
@@ -196,7 +197,7 @@ describe("duel - edge cases & security", () => {
     let m: Awaited<ReturnType<typeof createMarket>>;
 
     before(async () => {
-      m = await createMarket(new BN(100));
+      m = await createMarket(new BN(edgeBase + 0));
     });
 
     it("should reject buy with side = 2", async () => {
@@ -214,7 +215,6 @@ describe("duel - edge cases & security", () => {
           .accounts({
             buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
             tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
-            config: configPda,
             config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
@@ -229,7 +229,7 @@ describe("duel - edge cases & security", () => {
     let m: Awaited<ReturnType<typeof createMarket>>;
 
     before(async () => {
-      m = await createMarket(new BN(101));
+      m = await createMarket(new BN(edgeBase + 1));
     });
 
     it("should reject buy with 0 SOL", async () => {
@@ -245,7 +245,6 @@ describe("duel - edge cases & security", () => {
           .accounts({
             buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
             tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
-            config: configPda,
             config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
@@ -264,7 +263,6 @@ describe("duel - edge cases & security", () => {
           .accounts({
             seller: creator.publicKey, market: m.market, sideAccount: m.sideA,
             tokenMint: m.mintA, tokenVault: m.tvA, sellerTokenAccount: ata, solVault: m.svA,
-            config: configPda,
             config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
@@ -280,7 +278,7 @@ describe("duel - edge cases & security", () => {
 
     before(async () => {
       const now = Math.floor(Date.now() / 1000);
-      m = await createMarket(new BN(102), {
+      m = await createMarket(new BN(edgeBase + 2), {
         deadline: now + 12,
         twapWindow: 8,
         twapInterval: 10,
@@ -370,7 +368,7 @@ describe("duel - edge cases & security", () => {
     let ataA: PublicKey;
 
     before(async () => {
-      m = await createMarket(new BN(103));
+      m = await createMarket(new BN(edgeBase + 3));
       ataA = await buyTokens(m.market, m.sideA, m.tvA, m.svA, m.mintA, 0, new BN(LAMPORTS_PER_SOL));
     });
 
@@ -413,7 +411,7 @@ describe("duel - edge cases & security", () => {
     let m: Awaited<ReturnType<typeof createMarket>>;
 
     before(async () => {
-      m = await createMarket(new BN(104));
+      m = await createMarket(new BN(edgeBase + 4));
     });
 
     it("should reject buy when min_tokens_out not met", async () => {
@@ -443,7 +441,7 @@ describe("duel - edge cases & security", () => {
   describe("invalid market config", () => {
     it("should reject battle_tax_bps > 10000", async () => {
       try {
-        await createMarket(new BN(200), { battleTaxBps: 10001 });
+        await createMarket(new BN(edgeBase + 100), { battleTaxBps: 10001 });
         expect.fail("should have thrown");
       } catch (err: any) {
         // Error may be AnchorError or SendTransactionError
@@ -456,7 +454,7 @@ describe("duel - edge cases & security", () => {
 
     it("should reject protocol_fee_bps > 500", async () => {
       try {
-        await createMarket(new BN(201), { protocolFeeBps: 600 });
+        await createMarket(new BN(edgeBase + 101), { protocolFeeBps: 600 });
         expect.fail("should have thrown");
       } catch (err: any) {
         const code = err?.error?.errorCode?.code || err?.message || "";
@@ -468,7 +466,7 @@ describe("duel - edge cases & security", () => {
 
     it("should reject sell_penalty_max_bps > 3000", async () => {
       try {
-        await createMarket(new BN(202), { sellPenaltyMaxBps: 4000 });
+        await createMarket(new BN(edgeBase + 102), { sellPenaltyMaxBps: 4000 });
         expect.fail("should have thrown");
       } catch (err: any) {
         const code = err?.error?.errorCode?.code || err?.message || "";
@@ -480,7 +478,7 @@ describe("duel - edge cases & security", () => {
 
     it("should reject deadline in the past", async () => {
       try {
-        await createMarket(new BN(203), { deadline: 1000 });
+        await createMarket(new BN(edgeBase + 103), { deadline: 1000 });
         expect.fail("should have thrown");
       } catch (err: any) {
         const code = err?.error?.errorCode?.code || err?.message || "";
@@ -496,7 +494,7 @@ describe("duel - edge cases & security", () => {
 
     before(async () => {
       const now = Math.floor(Date.now() / 1000);
-      m = await createMarket(new BN(105), {
+      m = await createMarket(new BN(edgeBase + 5), {
         deadline: now + 20,
         twapWindow: 15,
         twapInterval: 10,
@@ -533,7 +531,7 @@ describe("duel - edge cases & security", () => {
 
     before(async () => {
       const now = Math.floor(Date.now() / 1000);
-      m = await createMarket(new BN(106), {
+      m = await createMarket(new BN(edgeBase + 6), {
         deadline: now + 12,
         twapWindow: 8,
         twapInterval: 10,

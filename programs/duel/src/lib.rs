@@ -12,6 +12,7 @@ pub mod state;
 
 use instructions::*;
 
+#[allow(deprecated)]
 #[program]
 pub mod duel {
     use super::*;

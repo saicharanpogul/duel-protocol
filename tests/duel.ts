@@ -38,7 +38,7 @@ describe("duel", () => {
   const creator = provider.wallet;
 
   // Market params
-  const marketId = new BN(1);
+  const marketId = new BN(Math.floor(Math.random() * 10_000_000) + 20_000_000);
   const totalSupplyPerSide = new BN(1_000_000_000); // 1B tokens (6 decimals = 1000 tokens)
   const curveParams = {
     a: new BN(1_000_000),
@@ -186,6 +186,7 @@ describe("duel", () => {
           solVaultA: solVaultA,
           solVaultB: solVaultB,
           protocolFeeAccount: protocolFeeAccount.publicKey,
+          config: configPda,
           metadataA: findMetadataPda(mintA),
           metadataB: findMetadataPda(mintB),
           tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
@@ -201,7 +202,7 @@ describe("duel", () => {
       // Verify market state
       const market = await program.account.market.fetch(marketPda);
       expect(market.authority.toString()).to.equal(creator.publicKey.toString());
-      expect(market.marketId.toNumber()).to.equal(1);
+      expect(market.marketId.toNumber()).to.equal(marketId.toNumber());
       expect(market.battleTaxBps).to.equal(battleTaxBps);
       expect(market.protocolFeeBps).to.equal(protocolFeeBps);
       expect(market.status).to.deep.equal({ active: {} });
@@ -416,7 +417,7 @@ describe("duel", () => {
 
   // ---- Full lifecycle with short deadline ----
   describe("full lifecycle (short deadline)", () => {
-    const shortMarketId = new BN(2);
+    const shortMarketId = new BN(Math.floor(Math.random() * 10_000_000) + 30_000_000);
     let m: PublicKey;
     let sA: PublicKey, sB: PublicKey;
     let mA: PublicKey, mB: PublicKey;
@@ -478,6 +479,7 @@ describe("duel", () => {
           tokenVaultA: tvA, tokenVaultB: tvB,
           solVaultA: svA, solVaultB: svB,
           protocolFeeAccount: protocolFeeAccount.publicKey,
+          config: configPda,
           metadataA: findMetadataPda(mA),
           metadataB: findMetadataPda(mB),
           tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,

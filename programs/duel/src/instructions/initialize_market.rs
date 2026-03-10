@@ -6,6 +6,7 @@ use crate::cpi::metaplex_metadata;
 use crate::errors::DuelError;
 use crate::events::MarketCreated;
 use crate::state::*;
+use anchor_lang::system_program;
 
 #[derive(Accounts)]
 #[instruction(market_id: u64)]
@@ -104,9 +105,16 @@ pub struct InitializeMarket<'info> {
     )]
     pub sol_vault_b: Account<'info, SolVault>,
 
-    /// Protocol fee recipient
     /// CHECK: Arbitrary fee account, no validation needed
     pub protocol_fee_account: UncheckedAccount<'info>,
+
+    /// Program config (pause check + market creation fee)
+    #[account(
+        seeds = [b"config"],
+        bump = config.bump,
+        constraint = !config.paused @ DuelError::ProtocolPaused,
+    )]
+    pub config: Account<'info, ProgramConfig>,
 
     /// Metadata account for token A
     /// CHECK: Created by Metaplex CPI, validated by seeds
@@ -198,6 +206,21 @@ pub fn handler(
         (creator_fee_bps as u32) + (protocol_fee_bps as u32) <= 2500,
         DuelError::InvalidFeeConfig
     );
+
+    // Charge market creation fee if configured
+    let creation_fee = ctx.accounts.config.market_creation_fee;
+    if creation_fee > 0 {
+        system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.creator.to_account_info(),
+                    to: ctx.accounts.protocol_fee_account.to_account_info(),
+                },
+            ),
+            creation_fee,
+        )?;
+    }
 
     let market = &mut ctx.accounts.market;
     let side_a = &mut ctx.accounts.side_a;
