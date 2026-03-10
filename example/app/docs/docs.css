@@ -141,53 +141,33 @@
   margin: 0 auto;
 }
 
-/* ─── Flow Diagram ─── */
+/* ─── Flow Diagram (White Theme) ─── */
 .flow-container {
-  background: #0F172A;
+  background: #FAFBFC;
+  border: 1px solid #E5E7EB;
   border-radius: 16px;
-  padding: 40px;
+  padding: 32px 24px;
   overflow: hidden;
   position: relative;
 }
 .flow-container svg {
   width: 100%;
   height: auto;
+  display: block;
 }
 
 /* Flow node styling */
 .flow-node {
-  transition: transform 0.3s ease, filter 0.3s ease;
-  cursor: pointer;
-}
-.flow-node:hover {
-  filter: brightness(1.2);
-}
-.flow-node rect, .flow-node-box {
-  rx: 8;
-  ry: 8;
-  transition: stroke 0.3s ease;
+  cursor: default;
 }
 .flow-label {
   font-family: 'Inter', sans-serif;
   font-size: 13px;
   font-weight: 600;
-  fill: white;
 }
 .flow-sublabel {
   font-family: 'Inter', sans-serif;
   font-size: 10px;
-  fill: #94A3B8;
-}
-.flow-line {
-  stroke-dasharray: 200;
-  stroke-dashoffset: 200;
-  animation: dash-draw 2s ease forwards;
-}
-.flow-line-dashed {
-  stroke-dasharray: 6 4;
-}
-@keyframes dash-draw {
-  to { stroke-dashoffset: 0; }
 }
 
 /* Flow legend */
@@ -195,21 +175,26 @@
   display: flex;
   justify-content: center;
   gap: 24px;
-  margin-top: 16px;
+  margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid #1E293B;
+  border-top: 1px solid #E5E7EB;
 }
 .flow-legend-item {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 0.8rem;
-  color: #94A3B8;
+  color: #6B7280;
 }
 .flow-legend-line {
   width: 24px;
-  height: 2px;
-  border-radius: 1px;
+  height: 3px;
+  border-radius: 2px;
+}
+.flow-legend-line-dashed {
+  width: 24px;
+  height: 0;
+  border-top: 3px dashed;
 }
 
 /* ─── Feature Cards ─── */

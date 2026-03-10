@@ -158,7 +158,8 @@ export default function DuelApp() {
           "",
           nameB,
           symbolB,
-          ""
+          "",
+          { unlocked: {} },
         )
         .accounts({
           creator: wallet.publicKey,

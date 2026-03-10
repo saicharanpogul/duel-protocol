@@ -1,20 +1,20 @@
 :root {
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #111118;
-  --bg-card: #16161f;
-  --bg-card-hover: #1c1c28;
-  --border: #2a2a3a;
-  --border-hover: #3a3a50;
-  --text-primary: #e8e8f0;
-  --text-secondary: #8888a0;
-  --text-label: #6666a0;
-  --accent-a: #6366f1;
-  --accent-a-glow: rgba(99, 102, 241, 0.2);
-  --accent-b: #f97316;
-  --accent-b-glow: rgba(249, 115, 22, 0.2);
-  --green: #22c55e;
-  --red: #ef4444;
-  --yellow: #eab308;
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F9FAFB;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F3F4F6;
+  --border: #E5E7EB;
+  --border-hover: #D1D5DB;
+  --text-primary: #111827;
+  --text-secondary: #6B7280;
+  --text-label: #9CA3AF;
+  --accent-a: #06B6D4;
+  --accent-a-glow: rgba(6, 182, 212, 0.15);
+  --accent-b: #8B5CF6;
+  --accent-b-glow: rgba(139, 92, 246, 0.15);
+  --green: #10B981;
+  --red: #EF4444;
+  --yellow: #F59E0B;
   --radius: 12px;
   --radius-sm: 8px;
 }
@@ -53,7 +53,7 @@ header {
 .header-left h1 {
   font-size: 1.75rem;
   font-weight: 800;
-  background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+  background: linear-gradient(135deg, #111827, var(--accent-a));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -75,6 +75,7 @@ header {
   font-weight: 600;
   font-size: 0.9rem;
   margin-bottom: 1.5rem;
+  color: white;
   animation: pulse 1.5s infinite ease-in-out;
 }
 
@@ -93,6 +94,7 @@ header {
   font-size: 2rem;
   font-weight: 700;
   margin-bottom: 1rem;
+  color: var(--text-primary);
 }
 
 .hero p {
@@ -115,11 +117,12 @@ header {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.5rem;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .card:hover {
   border-color: var(--border-hover);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 
 .card h2 {
@@ -129,6 +132,7 @@ header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  color: var(--text-primary);
 }
 
 .create-card {
@@ -179,7 +183,7 @@ header {
 .btn-primary {
   width: 100%;
   padding: 0.75rem;
-  background: linear-gradient(135deg, var(--accent-a), #8b5cf6);
+  background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
   border: none;
   border-radius: var(--radius-sm);
   color: white;
@@ -212,12 +216,12 @@ header {
 
 .btn-secondary:hover {
   border-color: var(--accent-a);
-  background: rgba(99, 102, 241, 0.1);
+  background: rgba(6, 182, 212, 0.06);
 }
 
 .btn-danger:hover {
   border-color: var(--red);
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.06);
 }
 
 .btn-buy {
@@ -275,12 +279,13 @@ header {
 .stat-value {
   font-size: 1rem;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
-.status-active { color: var(--green); }
-.status-twap-observation { color: var(--yellow); }
-.status-resolved { color: var(--accent-a); }
-.status-not-created { color: var(--text-secondary); }
+.status-active { color: var(--green) !important; }
+.status-twap-observation { color: var(--yellow) !important; }
+.status-resolved { color: var(--accent-b) !important; }
+.status-not-created { color: var(--text-secondary) !important; }
 
 .actions-row {
   display: flex;
@@ -373,9 +378,13 @@ header {
   display: flex;
   gap: 0.75rem;
   padding: 0.4rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border);
   font-size: 0.8rem;
   line-height: 1.3;
+}
+
+.log-entry:last-child {
+  border-bottom: none;
 }
 
 .log-ts {
@@ -387,6 +396,7 @@ header {
 
 .log-msg {
   word-break: break-word;
+  color: var(--text-primary);
 }
 
 .log-success .log-msg { color: var(--green); }
@@ -394,7 +404,7 @@ header {
 
 /* Wallet button override */
 .wallet-adapter-button {
-  background: linear-gradient(135deg, var(--accent-a), #8b5cf6) !important;
+  background: linear-gradient(135deg, var(--accent-a), var(--accent-b)) !important;
   border-radius: var(--radius-sm) !important;
   font-weight: 600 !important;
   font-family: "Inter", sans-serif !important;

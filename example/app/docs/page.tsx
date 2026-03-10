@@ -1,119 +1,157 @@
 "use client";
 import "./docs.css";
 
+// ─── Color palette for white-theme SVG diagrams ───
+const C = {
+  // Node fills (pastel backgrounds)
+  gray: "#F3F4F6",
+  teal: "#CCFBF1",
+  purple: "#EDE9FE",
+  amber: "#FEF3C7",
+  green: "#D1FAE5",
+  blue: "#DBEAFE",
+  // Node strokes
+  grayStroke: "#9CA3AF",
+  tealStroke: "#14B8A6",
+  purpleStroke: "#8B5CF6",
+  amberStroke: "#F59E0B",
+  greenStroke: "#10B981",
+  blueStroke: "#3B82F6",
+  // Text
+  dark: "#111827",
+  mid: "#6B7280",
+};
+
 // ─── SVG Flow Diagram: Market Lifecycle ───
 function MarketLifecycleFlow() {
+  // Node positions (center x, y) — clean left→right horizontal flow
+  const nodes = [
+    { x: 70,  y: 160, w: 120, h: 56, label: "Creator",      sub: "Any wallet",           fill: C.gray,   stroke: C.grayStroke },
+    { x: 260, y: 160, w: 140, h: 72, label: "Market PDA",    sub: "Dual bonding curves",  fill: C.teal,   stroke: C.tealStroke, sub2: "TWAP oracle" },
+    { x: 470, y: 160, w: 140, h: 56, label: "TWAP Window",   sub: "Manipulation-resistant",fill: C.purple, stroke: C.purpleStroke },
+    { x: 670, y: 160, w: 130, h: 72, label: "Resolution",    sub: "Winner determined",    fill: C.amber,  stroke: C.amberStroke, sub2: "Battle tax applied" },
+    { x: 860, y: 160, w: 130, h: 72, label: "Graduation",    sub: "→ Meteora DAMM v2",   fill: C.green,  stroke: C.greenStroke, sub2: "Permanent liquidity" },
+  ];
+
+  // Side nodes
+  const sideA = { x: 260, y: 50,  w: 130, h: 50, label: "Side A", sub: "Token + SOL vault", fill: C.blue, stroke: C.blueStroke };
+  const sideB = { x: 260, y: 280, w: 130, h: 50, label: "Side B", sub: "Token + SOL vault", fill: C.purple, stroke: C.purpleStroke };
+  const protocolFee = { x: 670, y: 290, w: 120, h: 46, label: "Protocol Fee", sub: "Configurable bps", fill: C.amber, stroke: C.amberStroke };
+
   return (
     <div className="flow-container">
-      <svg viewBox="0 0 900 340" fill="none" xmlns="http://www.w3.org/2000/svg">
-        {/* Creator Node */}
+      <svg viewBox="0 0 960 350" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrowTeal" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0,0 8,3 0,6" fill={C.tealStroke} />
+          </marker>
+          <marker id="arrowPurple" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0,0 8,3 0,6" fill={C.purpleStroke} />
+          </marker>
+          <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0,0 8,3 0,6" fill={C.greenStroke} />
+          </marker>
+          <marker id="arrowAmber" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0,0 8,3 0,6" fill={C.amberStroke} />
+          </marker>
+        </defs>
+
+        {/* Main horizontal arrows */}
+        <line x1={nodes[0].x + nodes[0].w/2} y1="160" x2={nodes[1].x - nodes[1].w/2 - 2} y2="160"
+          stroke={C.tealStroke} strokeWidth="2" markerEnd="url(#arrowTeal)" />
+        <line x1={nodes[1].x + nodes[1].w/2} y1="160" x2={nodes[2].x - nodes[2].w/2 - 2} y2="160"
+          stroke={C.purpleStroke} strokeWidth="2" markerEnd="url(#arrowPurple)" />
+        <line x1={nodes[2].x + nodes[2].w/2} y1="160" x2={nodes[3].x - nodes[3].w/2 - 2} y2="160"
+          stroke={C.amberStroke} strokeWidth="2" markerEnd="url(#arrowAmber)" />
+        <line x1={nodes[3].x + nodes[3].w/2} y1="160" x2={nodes[4].x - nodes[4].w/2 - 2} y2="160"
+          stroke={C.greenStroke} strokeWidth="2" markerEnd="url(#arrowGreen)" />
+
+        {/* Side A dashed connector */}
+        <line x1="260" y1={sideA.y + sideA.h/2 + sideA.h/2} x2="260" y2={nodes[1].y - nodes[1].h/2}
+          stroke={C.blueStroke} strokeWidth="1.5" strokeDasharray="5 3" />
+        {/* Side B dashed connector */}
+        <line x1="260" y1={nodes[1].y + nodes[1].h/2} x2="260" y2={sideB.y - sideB.h/2}
+          stroke={C.purpleStroke} strokeWidth="1.5" strokeDasharray="5 3" />
+        {/* Protocol fee dashed connector */}
+        <line x1="670" y1={nodes[3].y + nodes[3].h/2} x2="670" y2={protocolFee.y - protocolFee.h/2}
+          stroke={C.amberStroke} strokeWidth="1.5" strokeDasharray="5 3" />
+
+        {/* Main nodes */}
+        {nodes.map((n, i) => (
+          <g key={i} className="flow-node">
+            <rect x={n.x - n.w/2} y={n.y - n.h/2} width={n.w} height={n.h} rx="10"
+              fill={n.fill} stroke={n.stroke} strokeWidth="1.5" />
+            <text x={n.x} y={n.sub2 ? n.y - 6 : n.y - 2} textAnchor="middle"
+              className="flow-label" fill={C.dark}>{n.label}</text>
+            <text x={n.x} y={n.sub2 ? n.y + 10 : n.y + 14} textAnchor="middle"
+              className="flow-sublabel" fill={C.mid}>{n.sub}</text>
+            {n.sub2 && (
+              <text x={n.x} y={n.y + 24} textAnchor="middle"
+                className="flow-sublabel" fill={C.mid}>{n.sub2}</text>
+            )}
+          </g>
+        ))}
+
+        {/* Side A node */}
         <g className="flow-node">
-          <rect x="20" y="130" width="120" height="56" rx="8" fill="#1E293B" stroke="#334155" strokeWidth="1.5"/>
-          <text x="80" y="153" className="flow-label" textAnchor="middle">Creator</text>
-          <text x="80" y="170" className="flow-sublabel" textAnchor="middle">Any wallet</text>
+          <rect x={sideA.x - sideA.w/2} y={sideA.y - sideA.h/2} width={sideA.w} height={sideA.h} rx="8"
+            fill={sideA.fill} stroke={sideA.stroke} strokeWidth="1.5" />
+          <text x={sideA.x} y={sideA.y - 4} textAnchor="middle" className="flow-label" fill={C.dark}>{sideA.label}</text>
+          <text x={sideA.x} y={sideA.y + 12} textAnchor="middle" className="flow-sublabel" fill={C.mid}>{sideA.sub}</text>
         </g>
 
-        {/* Arrow: Creator → Market */}
-        <line x1="140" y1="158" x2="180" y2="158" stroke="#06B6D4" strokeWidth="2" className="flow-line"/>
-        <polygon points="178,153 188,158 178,163" fill="#06B6D4"/>
-
-        {/* Market PDA */}
+        {/* Side B node */}
         <g className="flow-node">
-          <rect x="190" y="120" width="130" height="76" rx="8" fill="#0F766E" stroke="#14B8A6" strokeWidth="1.5"/>
-          <text x="255" y="148" className="flow-label" textAnchor="middle">Market PDA</text>
-          <text x="255" y="165" className="flow-sublabel" textAnchor="middle">Dual bonding curves</text>
-          <text x="255" y="180" className="flow-sublabel" textAnchor="middle">TWAP oracle</text>
+          <rect x={sideB.x - sideB.w/2} y={sideB.y - sideB.h/2} width={sideB.w} height={sideB.h} rx="8"
+            fill={sideB.fill} stroke={sideB.stroke} strokeWidth="1.5" />
+          <text x={sideB.x} y={sideB.y - 4} textAnchor="middle" className="flow-label" fill={C.dark}>{sideB.label}</text>
+          <text x={sideB.x} y={sideB.y + 12} textAnchor="middle" className="flow-sublabel" fill={C.mid}>{sideB.sub}</text>
         </g>
 
-        {/* Side A */}
+        {/* Protocol Fee node */}
         <g className="flow-node">
-          <rect x="190" y="30" width="130" height="56" rx="8" fill="#1E293B" stroke="#06B6D4" strokeWidth="1.5"/>
-          <text x="255" y="53" className="flow-label" textAnchor="middle">Side A</text>
-          <text x="255" y="70" className="flow-sublabel" textAnchor="middle">Token + SOL vault</text>
-        </g>
-        <line x1="255" y1="86" x2="255" y2="120" stroke="#06B6D4" strokeWidth="1.5" strokeDasharray="5 3"/>
-
-        {/* Side B */}
-        <g className="flow-node">
-          <rect x="190" y="230" width="130" height="56" rx="8" fill="#1E293B" stroke="#8B5CF6" strokeWidth="1.5"/>
-          <text x="255" y="253" className="flow-label" textAnchor="middle">Side B</text>
-          <text x="255" y="270" className="flow-sublabel" textAnchor="middle">Token + SOL vault</text>
-        </g>
-        <line x1="255" y1="196" x2="255" y2="230" stroke="#8B5CF6" strokeWidth="1.5" strokeDasharray="5 3"/>
-
-        {/* Arrow: Market → TWAP */}
-        <line x1="320" y1="158" x2="375" y2="158" stroke="#06B6D4" strokeWidth="2" className="flow-line" style={{animationDelay: "0.3s"}}/>
-        <polygon points="373,153 383,158 373,163" fill="#06B6D4"/>
-
-        {/* TWAP Observation */}
-        <g className="flow-node">
-          <rect x="385" y="130" width="130" height="56" rx="8" fill="#7C3AED" stroke="#A78BFA" strokeWidth="1.5"/>
-          <text x="450" y="153" className="flow-label" textAnchor="middle">TWAP Window</text>
-          <text x="450" y="170" className="flow-sublabel" textAnchor="middle">Manipulation-resistant</text>
+          <rect x={protocolFee.x - protocolFee.w/2} y={protocolFee.y - protocolFee.h/2}
+            width={protocolFee.w} height={protocolFee.h} rx="8"
+            fill={protocolFee.fill} stroke={protocolFee.stroke} strokeWidth="1" />
+          <text x={protocolFee.x} y={protocolFee.y - 4} textAnchor="middle" className="flow-label" fill={C.dark} style={{fontSize: 11}}>{protocolFee.label}</text>
+          <text x={protocolFee.x} y={protocolFee.y + 12} textAnchor="middle" className="flow-sublabel" fill={C.mid}>{protocolFee.sub}</text>
         </g>
 
-        {/* Arrow: TWAP → Resolution */}
-        <line x1="515" y1="158" x2="560" y2="158" stroke="#06B6D4" strokeWidth="2" className="flow-line" style={{animationDelay: "0.6s"}}/>
-        <polygon points="558,153 568,158 558,163" fill="#06B6D4"/>
-
-        {/* Resolution */}
-        <g className="flow-node">
-          <rect x="570" y="120" width="130" height="76" rx="8" fill="#1E293B" stroke="#F59E0B" strokeWidth="1.5"/>
-          <text x="635" y="148" className="flow-label" textAnchor="middle">Resolution</text>
-          <text x="635" y="165" className="flow-sublabel" textAnchor="middle">Winner determined</text>
-          <text x="635" y="180" className="flow-sublabel" textAnchor="middle">Battle tax applied</text>
-        </g>
-
-        {/* Arrow: Resolution → Graduation */}
-        <line x1="700" y1="158" x2="745" y2="158" stroke="#10B981" strokeWidth="2" className="flow-line" style={{animationDelay: "0.9s"}}/>
-        <polygon points="743,153 753,158 743,163" fill="#10B981"/>
-
-        {/* Graduation / DEX */}
-        <g className="flow-node">
-          <rect x="755" y="120" width="130" height="76" rx="8" fill="#065F46" stroke="#10B981" strokeWidth="1.5"/>
-          <text x="820" y="148" className="flow-label" textAnchor="middle">Graduation</text>
-          <text x="820" y="165" className="flow-sublabel" textAnchor="middle">→ Meteora DAMM v2</text>
-          <text x="820" y="180" className="flow-sublabel" textAnchor="middle">Permanent liquidity</text>
-        </g>
-
-        {/* Protocol Fee - branching down from Resolution */}
-        <line x1="635" y1="196" x2="635" y2="250" stroke="#F59E0B" strokeWidth="1.5" strokeDasharray="5 3"/>
-        <g className="flow-node">
-          <rect x="570" y="255" width="130" height="50" rx="8" fill="#1E293B" stroke="#F59E0B" strokeWidth="1"/>
-          <text x="635" y="276" className="flow-label" textAnchor="middle" style={{fontSize: 11}}>Protocol Fee</text>
-          <text x="635" y="292" className="flow-sublabel" textAnchor="middle">Configurable bps</text>
-        </g>
-
-        {/* Status dots along the timeline */}
-        <circle cx="165" cy="158" r="4" fill="#06B6D4">
-          <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/>
+        {/* Animated flowing dot along main path */}
+        <circle r="5" fill={C.tealStroke} opacity="0.8">
+          <animateMotion
+            dur="5s"
+            repeatCount="indefinite"
+            path={`M ${nodes[0].x + nodes[0].w/2},160 L ${nodes[1].x - nodes[1].w/2},160 L ${nodes[1].x + nodes[1].w/2},160 L ${nodes[2].x - nodes[2].w/2},160 L ${nodes[2].x + nodes[2].w/2},160 L ${nodes[3].x - nodes[3].w/2},160 L ${nodes[3].x + nodes[3].w/2},160 L ${nodes[4].x - nodes[4].w/2},160`}
+          />
         </circle>
-        <circle cx="360" cy="158" r="4" fill="#06B6D4">
-          <animate attributeName="opacity" values="1;0.3;1" dur="2s" begin="0.5s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="545" cy="158" r="4" fill="#F59E0B">
-          <animate attributeName="opacity" values="1;0.3;1" dur="2s" begin="1s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="730" cy="158" r="4" fill="#10B981">
-          <animate attributeName="opacity" values="1;0.3;1" dur="2s" begin="1.5s" repeatCount="indefinite"/>
+
+        {/* Second animated dot offset */}
+        <circle r="4" fill={C.greenStroke} opacity="0.6">
+          <animateMotion
+            dur="5s"
+            begin="2.5s"
+            repeatCount="indefinite"
+            path={`M ${nodes[0].x + nodes[0].w/2},160 L ${nodes[1].x - nodes[1].w/2},160 L ${nodes[1].x + nodes[1].w/2},160 L ${nodes[2].x - nodes[2].w/2},160 L ${nodes[2].x + nodes[2].w/2},160 L ${nodes[3].x - nodes[3].w/2},160 L ${nodes[3].x + nodes[3].w/2},160 L ${nodes[4].x - nodes[4].w/2},160`}
+          />
         </circle>
       </svg>
 
       <div className="flow-legend">
         <div className="flow-legend-item">
-          <div className="flow-legend-line" style={{background: "#06B6D4"}}/>
+          <div className="flow-legend-line" style={{background: C.tealStroke}} />
           <span>Direct flow</span>
         </div>
         <div className="flow-legend-item">
-          <div className="flow-legend-line" style={{background: "#06B6D4", borderTop: "2px dashed #06B6D4", height: 0}}/>
+          <div className="flow-legend-line-dashed" style={{borderColor: C.blueStroke}} />
           <span>Side association</span>
         </div>
         <div className="flow-legend-item">
-          <div className="flow-legend-line" style={{background: "#10B981"}}/>
+          <div className="flow-legend-line" style={{background: C.greenStroke}} />
           <span>Graduation</span>
         </div>
         <div className="flow-legend-item">
-          <div className="flow-legend-line" style={{background: "#F59E0B", borderTop: "2px dashed #F59E0B", height: 0}}/>
+          <div className="flow-legend-line-dashed" style={{borderColor: C.amberStroke}} />
           <span>Fee collection</span>
         </div>
       </div>
@@ -123,94 +161,118 @@ function MarketLifecycleFlow() {
 
 // ─── SVG Flow Diagram: Fund Flow ───
 function FundFlowDiagram() {
+  const nodes = [
+    { x: 80,  y: 140, w: 110, h: 56, label: "User",         sub: "Buys with SOL",      fill: C.blue,   stroke: C.blueStroke },
+    { x: 260, y: 140, w: 120, h: 56, label: "SOL Vault",     sub: "Reserve pool",       fill: C.teal,   stroke: C.tealStroke },
+    { x: 460, y: 140, w: 130, h: 56, label: "Winner Vault",  sub: "Enhanced reserve",   fill: C.purple, stroke: C.purpleStroke },
+    { x: 660, y: 140, w: 150, h: 72, label: "Meteora Pool",  sub: "DAMM v2 liquidity",  fill: C.green,  stroke: C.greenStroke, sub2: "Token / WSOL pair" },
+    { x: 860, y: 140, w: 100, h: 56, label: "LP Fees",       sub: "Claimable",          fill: C.gray,   stroke: C.grayStroke },
+  ];
+  const battleTax = { x: 390, y: 40, w: 130, h: 50, label: "Battle Tax", sub: "Winner gets loser's %", fill: C.amber, stroke: C.amberStroke };
+  const protocolFee = { x: 260, y: 250, w: 120, h: 46, label: "Protocol Fee", sub: "0-5%", fill: C.amber, stroke: C.amberStroke };
+
   return (
     <div className="flow-container">
-      <svg viewBox="0 0 900 280" fill="none" xmlns="http://www.w3.org/2000/svg">
-        {/* User */}
+      <svg viewBox="0 0 960 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrowTeal2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0,0 8,3 0,6" fill={C.tealStroke} />
+          </marker>
+          <marker id="arrowPurple2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0,0 8,3 0,6" fill={C.purpleStroke} />
+          </marker>
+          <marker id="arrowGreen2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0,0 8,3 0,6" fill={C.greenStroke} />
+          </marker>
+          <marker id="arrowAmber2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0,0 8,3 0,6" fill={C.amberStroke} />
+          </marker>
+        </defs>
+
+        {/* Main horizontal arrows */}
+        <line x1={nodes[0].x + nodes[0].w/2} y1="140" x2={nodes[1].x - nodes[1].w/2 - 2} y2="140"
+          stroke={C.tealStroke} strokeWidth="2" markerEnd="url(#arrowTeal2)" />
+        <line x1={nodes[1].x + nodes[1].w/2} y1="140" x2={nodes[2].x - nodes[2].w/2 - 2} y2="140"
+          stroke={C.purpleStroke} strokeWidth="2" markerEnd="url(#arrowPurple2)" />
+        <line x1={nodes[2].x + nodes[2].w/2} y1="140" x2={nodes[3].x - nodes[3].w/2 - 2} y2="140"
+          stroke={C.greenStroke} strokeWidth="2" markerEnd="url(#arrowGreen2)" />
+        <line x1={nodes[3].x + nodes[3].w/2} y1="140" x2={nodes[4].x - nodes[4].w/2 - 2} y2="140"
+          stroke={C.greenStroke} strokeWidth="2" markerEnd="url(#arrowGreen2)" />
+
+        {/* Battle Tax diagonal arrow from SOL Vault up to Battle Tax */}
+        <line x1={nodes[1].x + nodes[1].w/2 - 10} y1={nodes[1].y - nodes[1].h/2}
+          x2={battleTax.x - battleTax.w/2} y2={battleTax.y + battleTax.h/2 - 5}
+          stroke={C.amberStroke} strokeWidth="1.5" markerEnd="url(#arrowAmber2)" />
+
+        {/* Protocol Fee dashed down */}
+        <line x1="260" y1={nodes[1].y + nodes[1].h/2} x2="260" y2={protocolFee.y - protocolFee.h/2}
+          stroke={C.amberStroke} strokeWidth="1.5" strokeDasharray="5 3" />
+
+        {/* Main nodes */}
+        {nodes.map((n, i) => (
+          <g key={i} className="flow-node">
+            <rect x={n.x - n.w/2} y={n.y - n.h/2} width={n.w} height={n.h} rx="10"
+              fill={n.fill} stroke={n.stroke} strokeWidth="1.5" />
+            <text x={n.x} y={n.sub2 ? n.y - 6 : n.y - 2} textAnchor="middle"
+              className="flow-label" fill={C.dark}>{n.label}</text>
+            <text x={n.x} y={n.sub2 ? n.y + 10 : n.y + 14} textAnchor="middle"
+              className="flow-sublabel" fill={C.mid}>{n.sub}</text>
+            {n.sub2 && (
+              <text x={n.x} y={n.y + 24} textAnchor="middle"
+                className="flow-sublabel" fill={C.mid}>{n.sub2}</text>
+            )}
+          </g>
+        ))}
+
+        {/* Battle Tax node */}
         <g className="flow-node">
-          <rect x="30" y="100" width="110" height="56" rx="8" fill="#1E293B" stroke="#06B6D4" strokeWidth="1.5"/>
-          <text x="85" y="123" className="flow-label" textAnchor="middle">User</text>
-          <text x="85" y="140" className="flow-sublabel" textAnchor="middle">Buys with SOL</text>
+          <rect x={battleTax.x - battleTax.w/2} y={battleTax.y - battleTax.h/2}
+            width={battleTax.w} height={battleTax.h} rx="8"
+            fill={battleTax.fill} stroke={battleTax.stroke} strokeWidth="1.5" />
+          <text x={battleTax.x} y={battleTax.y - 4} textAnchor="middle" className="flow-label" fill={C.dark}>{battleTax.label}</text>
+          <text x={battleTax.x} y={battleTax.y + 12} textAnchor="middle" className="flow-sublabel" fill={C.mid}>{battleTax.sub}</text>
         </g>
 
-        {/* Arrow */}
-        <line x1="140" y1="128" x2="185" y2="128" stroke="#06B6D4" strokeWidth="2" className="flow-line"/>
-        <polygon points="183,123 193,128 183,133" fill="#06B6D4"/>
-
-        {/* SOL Vault */}
+        {/* Protocol Fee node */}
         <g className="flow-node">
-          <rect x="195" y="100" width="110" height="56" rx="8" fill="#0F766E" stroke="#14B8A6" strokeWidth="1.5"/>
-          <text x="250" y="123" className="flow-label" textAnchor="middle">SOL Vault</text>
-          <text x="250" y="140" className="flow-sublabel" textAnchor="middle">Reserve pool</text>
+          <rect x={protocolFee.x - protocolFee.w/2} y={protocolFee.y - protocolFee.h/2}
+            width={protocolFee.w} height={protocolFee.h} rx="8"
+            fill={protocolFee.fill} stroke={protocolFee.stroke} strokeWidth="1" />
+          <text x={protocolFee.x} y={protocolFee.y - 4} textAnchor="middle" className="flow-label" fill={C.dark} style={{fontSize: 11}}>{protocolFee.label}</text>
+          <text x={protocolFee.x} y={protocolFee.y + 12} textAnchor="middle" className="flow-sublabel" fill={C.mid}>{protocolFee.sub}</text>
         </g>
 
-        {/* Branch up: Battle Tax */}
-        <line x1="305" y1="100" x2="370" y2="50" stroke="#F59E0B" strokeWidth="1.5" className="flow-line" style={{animationDelay: "0.4s"}}/>
-        <g className="flow-node">
-          <rect x="370" y="22" width="130" height="56" rx="8" fill="#1E293B" stroke="#F59E0B" strokeWidth="1"/>
-          <text x="435" y="45" className="flow-label" textAnchor="middle">Battle Tax</text>
-          <text x="435" y="62" className="flow-sublabel" textAnchor="middle">Winner gets loser&apos;s %</text>
-        </g>
+        {/* Animated flowing dot */}
+        <circle r="5" fill={C.tealStroke} opacity="0.8">
+          <animateMotion
+            dur="4s"
+            repeatCount="indefinite"
+            path={`M ${nodes[0].x + nodes[0].w/2},140 L ${nodes[1].x - nodes[1].w/2},140 L ${nodes[1].x + nodes[1].w/2},140 L ${nodes[2].x - nodes[2].w/2},140 L ${nodes[2].x + nodes[2].w/2},140 L ${nodes[3].x - nodes[3].w/2},140 L ${nodes[3].x + nodes[3].w/2},140 L ${nodes[4].x - nodes[4].w/2},140`}
+          />
+        </circle>
 
-        {/* Main flow continues */}
-        <line x1="305" y1="128" x2="370" y2="128" stroke="#06B6D4" strokeWidth="2" className="flow-line" style={{animationDelay: "0.3s"}}/>
-        <polygon points="368,123 378,128 368,133" fill="#06B6D4"/>
-
-        {/* Winner Vault */}
-        <g className="flow-node">
-          <rect x="380" y="100" width="130" height="56" rx="8" fill="#7C3AED" stroke="#A78BFA" strokeWidth="1.5"/>
-          <text x="445" y="123" className="flow-label" textAnchor="middle">Winner Vault</text>
-          <text x="445" y="140" className="flow-sublabel" textAnchor="middle">Enhanced reserve</text>
-        </g>
-
-        {/* Arrow to Pool */}
-        <line x1="510" y1="128" x2="575" y2="128" stroke="#10B981" strokeWidth="2" className="flow-line" style={{animationDelay: "0.6s"}}/>
-        <polygon points="573,123 583,128 573,133" fill="#10B981"/>
-
-        {/* Meteora Pool */}
-        <g className="flow-node">
-          <rect x="585" y="90" width="140" height="76" rx="8" fill="#065F46" stroke="#10B981" strokeWidth="1.5"/>
-          <text x="655" y="118" className="flow-label" textAnchor="middle">Meteora Pool</text>
-          <text x="655" y="135" className="flow-sublabel" textAnchor="middle">DAMM v2 liquidity</text>
-          <text x="655" y="150" className="flow-sublabel" textAnchor="middle">Token / WSOL pair</text>
-        </g>
-
-        {/* Arrow to LP Fees */}
-        <line x1="725" y1="128" x2="770" y2="128" stroke="#10B981" strokeWidth="2" className="flow-line" style={{animationDelay: "0.9s"}}/>
-        <polygon points="768,123 778,128 768,133" fill="#10B981"/>
-
-        {/* LP Fees */}
-        <g className="flow-node">
-          <rect x="780" y="100" width="100" height="56" rx="8" fill="#1E293B" stroke="#10B981" strokeWidth="1"/>
-          <text x="830" y="123" className="flow-label" textAnchor="middle" style={{fontSize: 12}}>LP Fees</text>
-          <text x="830" y="140" className="flow-sublabel" textAnchor="middle">Claimable</text>
-        </g>
-
-        {/* Branch down: Protocol Fee */}
-        <line x1="250" y1="156" x2="250" y2="210" stroke="#F59E0B" strokeWidth="1.5" strokeDasharray="5 3"/>
-        <g className="flow-node">
-          <rect x="195" y="210" width="110" height="50" rx="8" fill="#1E293B" stroke="#F59E0B" strokeWidth="1"/>
-          <text x="250" y="231" className="flow-label" textAnchor="middle" style={{fontSize: 11}}>Protocol Fee</text>
-          <text x="250" y="247" className="flow-sublabel" textAnchor="middle">0-5%</text>
-        </g>
-
-        {/* Animated dot along path */}
-        <circle r="3.5" fill="#06B6D4">
-          <animateMotion dur="4s" repeatCount="indefinite" path="M85,128 L250,128 L445,128 L655,128 L830,128"/>
+        {/* Second dot with offset */}
+        <circle r="4" fill={C.greenStroke} opacity="0.6">
+          <animateMotion
+            dur="4s"
+            begin="2s"
+            repeatCount="indefinite"
+            path={`M ${nodes[0].x + nodes[0].w/2},140 L ${nodes[1].x - nodes[1].w/2},140 L ${nodes[1].x + nodes[1].w/2},140 L ${nodes[2].x - nodes[2].w/2},140 L ${nodes[2].x + nodes[2].w/2},140 L ${nodes[3].x - nodes[3].w/2},140 L ${nodes[3].x + nodes[3].w/2},140 L ${nodes[4].x - nodes[4].w/2},140`}
+          />
         </circle>
       </svg>
 
       <div className="flow-legend">
         <div className="flow-legend-item">
-          <div className="flow-legend-line" style={{background: "#06B6D4"}}/>
+          <div className="flow-legend-line" style={{background: C.tealStroke}} />
           <span>SOL flow</span>
         </div>
         <div className="flow-legend-item">
-          <div className="flow-legend-line" style={{background: "#10B981"}}/>
+          <div className="flow-legend-line" style={{background: C.greenStroke}} />
           <span>Graduation flow</span>
         </div>
         <div className="flow-legend-item">
-          <div className="flow-legend-line" style={{background: "#F59E0B"}}/>
+          <div className="flow-legend-line-dashed" style={{borderColor: C.amberStroke}} />
           <span>Fee extraction</span>
         </div>
       </div>
@@ -260,7 +322,7 @@ export default function DocsPage() {
         <div className="docs-section-header">
           <h2>Market Lifecycle</h2>
           <p>
-            Every market flows through four distinct phases — from creation to permanent 
+            Every market flows through four distinct phases — from creation to permanent
             DEX liquidity. The TWAP oracle ensures manipulation-resistant resolution.
           </p>
         </div>
@@ -272,7 +334,7 @@ export default function DocsPage() {
         <div className="docs-section-header">
           <h2>Fund Flow &amp; Capital Efficiency</h2>
           <p>
-            SOL flows into bonding curve vaults, winners inherit a portion of losing reserves 
+            SOL flows into bonding curve vaults, winners inherit a portion of losing reserves
             via configurable battle tax, then graduated liquidity earns LP fees forever.
           </p>
         </div>
@@ -313,8 +375,8 @@ export default function DocsPage() {
           </div>
           <div className="feature-card">
             <div className="feature-card-icon" style={{background: "linear-gradient(135deg, #DBEAFE, #BFDBFE)"}}>🛡️</div>
-            <h3>Sell Protection</h3>
-            <p>Configurable sell penalty near deadline prevents front-running the resolution outcome.</p>
+            <h3>Token-2022 Support</h3>
+            <p>Full support for both SPL Token and Token-2022 mints. Transfer fees, metadata extensions, and more.</p>
           </div>
         </div>
       </section>
@@ -331,7 +393,7 @@ export default function DocsPage() {
               <span style={{fontSize: "1.2rem"}}>📄</span>
               <h3>Market Account</h3>
             </div>
-            <p>Stores authority, deadline, TWAP config, battle tax, LP lock mode, graduation status, and curve parameters. ~300 bytes with 61 bytes reserved.</p>
+            <p>Stores authority, deadline, TWAP config, battle tax, LP lock mode, quote mint, graduation status, and curve parameters.</p>
           </div>
           <div className="arch-card">
             <div className="arch-card-header">
@@ -352,7 +414,7 @@ export default function DocsPage() {
               <span style={{fontSize: "1.2rem"}}>🏊</span>
               <h3>DAMM v2 Pool</h3>
             </div>
-            <p>Customizable constant-product AMM. Token/WSOL pair with configurable fees ands sqrt price range.</p>
+            <p>Customizable constant-product AMM. Configurable quote token (WSOL default) with configurable fees and sqrt price range.</p>
           </div>
         </div>
       </section>
@@ -452,24 +514,24 @@ export default function DocsPage() {
 
         {/* Code example */}
         <div className="code-block">
-          <pre>{`<span class="code-comment">// Create a market with permanent LP lock</span>
-<span class="code-keyword">await</span> program.methods
+          <pre>{`// Create a market with permanent LP lock
+await program.methods
   .initializeMarket(
     marketId,
-    <span class="code-keyword">new</span> BN(deadline),
-    <span class="code-keyword">new</span> BN(twapWindow),
-    <span class="code-keyword">new</span> BN(twapInterval),
-    <span class="code-number">5000</span>,           <span class="code-comment">// 50% battle tax</span>
-    <span class="code-number">100</span>,            <span class="code-comment">// 1% protocol fee</span>
-    <span class="code-number">1000</span>,           <span class="code-comment">// 10% max sell penalty</span>
-    <span class="code-keyword">new</span> BN(<span class="code-number">300</span>),     <span class="code-comment">// 5 min protection offset</span>
+    new BN(deadline),
+    new BN(twapWindow),
+    new BN(twapInterval),
+    5000,           // 50% battle tax
+    100,            // 1% protocol fee
+    1000,           // 10% max sell penalty
+    new BN(300),    // 5 min protection offset
     curveParams,
     totalSupply,
-    <span class="code-string">"Side A"</span>, <span class="code-string">"DUEL-A"</span>, <span class="code-string">""</span>,
-    <span class="code-string">"Side B"</span>, <span class="code-string">"DUEL-B"</span>, <span class="code-string">""</span>,
-    { <span class="code-keyword">permanentLock</span>: {} }  <span class="code-comment">// LP locked forever</span>
+    "Side A", "DUEL-A", "",
+    "Side B", "DUEL-B", "",
+    { permanentLock: {} }  // LP locked forever
   )
-  .accountsStrict({ <span class="code-comment">/* ... */</span> })
+  .accountsStrict({ /* ... */ })
   .rpc();`}</pre>
         </div>
       </section>
