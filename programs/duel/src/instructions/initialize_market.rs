@@ -154,6 +154,7 @@ pub fn handler(
     name_b: String,
     symbol_b: String,
     uri_b: String,
+    lp_lock_mode: LpLockMode,
 ) -> Result<()> {
     let clock = Clock::get()?;
     let now = clock.unix_timestamp;
@@ -212,6 +213,7 @@ pub fn handler(
     market.protocol_fee_account = ctx.accounts.protocol_fee_account.key();
     market.graduated_a = false;
     market.graduated_b = false;
+    market.lp_lock_mode = lp_lock_mode;
     market.bump = ctx.bumps.market;
 
     // Initialize Side A

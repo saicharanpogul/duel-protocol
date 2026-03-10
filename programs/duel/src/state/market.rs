@@ -9,6 +9,16 @@ pub enum MarketStatus {
     Resolved,
 }
 
+/// LP lock mode — configurable at market creation.
+/// Determines whether LP liquidity can be withdrawn after graduation.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
+pub enum LpLockMode {
+    /// LP can be withdrawn via remove_liquidity + close_position
+    Unlocked = 0,
+    /// LP is permanently locked at graduation — only fees are claimable
+    PermanentLock = 1,
+}
+
 #[account]
 pub struct Market {
     /// Market creator
@@ -53,6 +63,8 @@ pub struct Market {
     pub graduated_a: bool,
     /// Whether Side B has graduated to DEX
     pub graduated_b: bool,
+    /// LP lock mode (set at creation, governs post-graduation LP behavior)
+    pub lp_lock_mode: LpLockMode,
     /// PDA bump
     pub bump: u8,
 }
@@ -80,6 +92,7 @@ impl Market {
         + 32  // protocol_fee_account
         + 1   // graduated_a
         + 1   // graduated_b
+        + 1   // lp_lock_mode
         + 1   // bump
-        + 62; // padding (reduced from 64)
+        + 61; // padding (reduced from 62)
 }

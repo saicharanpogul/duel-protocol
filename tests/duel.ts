@@ -147,6 +147,7 @@ describe("duel", () => {
           "Duel Side B",
           "DUEL-B",
           "https://duel.protocol/tokens/b",
+          { unlocked: {} },
         )
         .accounts({
           creator: creator.publicKey,
@@ -431,6 +432,7 @@ describe("duel", () => {
           "Short B",
           "SH-B",
           "",
+          { unlocked: {} },
         )
         .accounts({
           creator: creator.publicKey,

@@ -34,6 +34,7 @@ pub mod duel {
         name_b: String,
         symbol_b: String,
         uri_b: String,
+        lp_lock_mode: state::LpLockMode,
     ) -> Result<()> {
         instructions::initialize_market::handler(
             ctx,
@@ -53,6 +54,7 @@ pub mod duel {
             name_b,
             symbol_b,
             uri_b,
+            lp_lock_mode,
         )
     }
 
@@ -110,5 +112,30 @@ pub mod duel {
         side: u8,
     ) -> Result<()> {
         instructions::claim_pool_fees::handler(ctx, side)
+    }
+
+    pub fn lock_position(
+        ctx: Context<LockPosition>,
+        side: u8,
+        lock_liquidity: u128,
+    ) -> Result<()> {
+        instructions::lock_position::handler(ctx, side, lock_liquidity)
+    }
+
+    pub fn remove_liquidity(
+        ctx: Context<RemoveLiquidity>,
+        side: u8,
+        liquidity_delta: u128,
+        min_token_a: u64,
+        min_token_b: u64,
+    ) -> Result<()> {
+        instructions::remove_liquidity::handler(ctx, side, liquidity_delta, min_token_a, min_token_b)
+    }
+
+    pub fn close_position(
+        ctx: Context<ClosePosition>,
+        side: u8,
+    ) -> Result<()> {
+        instructions::close_position::handler(ctx, side)
     }
 }

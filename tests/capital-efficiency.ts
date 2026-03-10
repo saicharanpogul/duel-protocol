@@ -94,6 +94,7 @@ describe("duel - capital efficiency & battle testing", () => {
         new BN(opts.protectionActivationOffset),
         curveParams, totalSupply,
         "Test A", "TA", "", "Test B", "TB", "",
+        { unlocked: {} },
       )
       .accountsStrict({
         creator: creator.publicKey,
@@ -954,6 +955,7 @@ describe("duel - capital efficiency & battle testing", () => {
           { a: new BN(1_000_000), n: 1, b: new BN(1_000) },
           new BN(1_000_000_000),
           "CU Test A", "CUA", "", "CU Test B", "CUB", "",
+          { unlocked: {} },
         )
         .accountsStrict({
           creator: creator.publicKey,

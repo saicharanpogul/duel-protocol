@@ -9,6 +9,9 @@ pub mod sell_post_resolution;
 pub mod graduate_to_dex;
 pub mod close_sol_vault;
 pub mod claim_pool_fees;
+pub mod lock_position;
+pub mod remove_liquidity;
+pub mod close_position;
 
 pub use initialize_market::*;
 pub use buy_tokens::*;
@@ -19,4 +22,7 @@ pub use sell_post_resolution::*;
 pub use graduate_to_dex::*;
 pub use close_sol_vault::*;
 pub use claim_pool_fees::*;
+pub use lock_position::*;
+pub use remove_liquidity::*;
+pub use close_position::*;
 

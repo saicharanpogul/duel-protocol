@@ -121,6 +121,7 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
         { a: new BN(1_000_000), n: 1, b: new BN(1_000) },
         new BN(1_000_000_000),
         "Grad A", "GA", "", "Grad B", "GB", "",
+        { unlocked: {} },
       )
       .accountsStrict({
         creator: creator.publicKey,

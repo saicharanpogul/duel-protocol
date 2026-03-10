@@ -108,6 +108,7 @@ describe("duel - edge cases & security", () => {
         "Edge B",
         "EB",
         "",
+        { unlocked: {} },
       )
       .accounts({
         creator: creator.publicKey,
