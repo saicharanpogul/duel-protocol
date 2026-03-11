@@ -19,6 +19,17 @@ pub enum LpLockMode {
     PermanentLock = 1,
 }
 
+/// Resolution mode — determines how a market outcome is decided.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
+pub enum ResolutionMode {
+    /// Pure TWAP resolution (default for subjective markets)
+    Twap = 0,
+    /// Oracle-only resolution (oracle_authority must submit outcome)
+    Oracle = 1,
+    /// Oracle preferred, TWAP fallback after dispute window expires
+    OracleWithTwapFallback = 2,
+}
+
 #[account]
 pub struct Market {
     /// Market creator
@@ -75,6 +86,12 @@ pub struct Market {
     pub graduated_b: bool,
     /// LP lock mode (set at creation, governs post-graduation LP behavior)
     pub lp_lock_mode: LpLockMode,
+    /// Resolution mode (Twap, Oracle, or OracleWithTwapFallback)
+    pub resolution_mode: ResolutionMode,
+    /// Oracle authority (required if resolution_mode != Twap)
+    pub oracle_authority: Pubkey,
+    /// Dispute window in seconds after deadline (for OracleWithTwapFallback)
+    pub oracle_dispute_window: u64,
     /// Re-entrancy lock (prevents concurrent buy/sell during CPI)
     pub locked: bool,
     /// PDA bump
@@ -110,7 +127,10 @@ impl Market {
         + 1   // graduated_a
         + 1   // graduated_b
         + 1   // lp_lock_mode
+        + 1   // resolution_mode
+        + 32  // oracle_authority
+        + 8   // oracle_dispute_window
         + 1   // locked
         + 1   // bump
-        + 16; // padding (reduced for new fields)
+        + 64; // padding
 }

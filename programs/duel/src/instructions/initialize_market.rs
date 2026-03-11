@@ -180,6 +180,9 @@ pub fn handler(
     max_observation_change_per_update: u64,
     min_twap_spread_bps: u16,
     creator_fee_bps: u16,
+    resolution_mode: ResolutionMode,
+    oracle_authority: Pubkey,
+    oracle_dispute_window: u64,
 ) -> Result<()> {
     let clock = Clock::get()?;
     let now = clock.unix_timestamp;
@@ -216,6 +219,16 @@ pub fn handler(
         (creator_fee_bps as u32) + (protocol_fee_bps as u32) <= 2500,
         DuelError::InvalidFeeConfig
     );
+    // Validate oracle params
+    if resolution_mode != ResolutionMode::Twap {
+        require!(
+            oracle_authority != Pubkey::default(),
+            DuelError::InvalidMarketConfig
+        );
+    }
+    if resolution_mode == ResolutionMode::OracleWithTwapFallback {
+        require!(oracle_dispute_window > 0, DuelError::InvalidMarketConfig);
+    }
 
     // Charge market creation fee if configured
     let creation_fee = ctx.accounts.config.market_creation_fee;
@@ -264,6 +277,9 @@ pub fn handler(
     market.graduated_a = false;
     market.graduated_b = false;
     market.lp_lock_mode = lp_lock_mode;
+    market.resolution_mode = resolution_mode;
+    market.oracle_authority = oracle_authority;
+    market.oracle_dispute_window = oracle_dispute_window;
     market.locked = false;
     market.bump = ctx.bumps.market;
 

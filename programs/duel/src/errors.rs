@@ -46,4 +46,14 @@ pub enum DuelError {
     DrawResult,
     #[msg("Invalid fee configuration")]
     InvalidFeeConfig,
+    #[msg("Oracle resolution not allowed for this market")]
+    OracleNotAllowed,
+    #[msg("TWAP resolution not allowed for this market (oracle-only mode)")]
+    TwapNotAllowed,
+    #[msg("Oracle dispute window has not expired yet")]
+    OracleDisputeWindowActive,
+    #[msg("Unauthorized oracle authority")]
+    UnauthorizedOracle,
+    #[msg("Invalid winning side (must be 0 or 1)")]
+    InvalidWinningSide,
 }

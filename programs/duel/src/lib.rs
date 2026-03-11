@@ -56,6 +56,9 @@ pub mod duel {
         max_observation_change_per_update: u64,
         min_twap_spread_bps: u16,
         creator_fee_bps: u16,
+        resolution_mode: state::ResolutionMode,
+        oracle_authority: Pubkey,
+        oracle_dispute_window: u64,
     ) -> Result<()> {
         instructions::initialize_market::handler(
             ctx,
@@ -79,6 +82,9 @@ pub mod duel {
             max_observation_change_per_update,
             min_twap_spread_bps,
             creator_fee_bps,
+            resolution_mode,
+            oracle_authority,
+            oracle_dispute_window,
         )
     }
 
@@ -106,6 +112,13 @@ pub mod duel {
 
     pub fn resolve_market(ctx: Context<ResolveMarket>) -> Result<()> {
         instructions::resolve_market::handler(ctx)
+    }
+
+    pub fn resolve_with_oracle(
+        ctx: Context<ResolveWithOracle>,
+        winning_side: u8,
+    ) -> Result<()> {
+        instructions::resolve_with_oracle::handler(ctx, winning_side)
     }
 
     pub fn sell_post_resolution(

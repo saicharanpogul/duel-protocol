@@ -7,9 +7,9 @@ use crate::events::MarketResolved;
 use crate::state::*;
 
 #[derive(Accounts)]
-pub struct ResolveMarket<'info> {
-    /// Anyone can resolve (permissionless)
-    pub resolver: Signer<'info>,
+pub struct ResolveWithOracle<'info> {
+    /// Oracle authority — must match market.oracle_authority
+    pub oracle: Signer<'info>,
 
     #[account(mut)]
     pub market: Account<'info, Market>,
@@ -66,17 +66,16 @@ pub struct ResolveMarket<'info> {
     pub quote_token_program: Interface<'info, TokenInterface>,
 }
 
-pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
+pub fn handler(ctx: Context<ResolveWithOracle>, winning_side: u8) -> Result<()> {
     let clock = Clock::get()?;
 
-    // Read all needed values from market immutably first
+    // Read market values immutably
     let market_key;
+    let oracle_authority;
+    let resolution_mode;
     let deadline;
     let status;
-    let twap_window;
-    let twap_interval;
-    let twap_samples_count;
-    let min_twap_spread_bps;
+    let oracle_dispute_window;
     let battle_tax_bps;
     let creator_fee_bps;
     let protocol_fee_bps;
@@ -87,39 +86,30 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
     {
         let market = &ctx.accounts.market;
         market_key = market.key();
+        oracle_authority = market.oracle_authority;
+        resolution_mode = market.resolution_mode;
         deadline = market.deadline;
         status = market.status.clone();
-        twap_window = market.twap_window;
-        twap_interval = market.twap_interval;
-        twap_samples_count = market.twap_samples_count;
-        min_twap_spread_bps = market.min_twap_spread_bps;
+        oracle_dispute_window = market.oracle_dispute_window;
         battle_tax_bps = market.battle_tax_bps;
         creator_fee_bps = market.creator_fee_bps;
         protocol_fee_bps = market.protocol_fee_bps;
         market_id_bytes = market.market_id.to_le_bytes();
         bump = market.bump;
         authority_key = market.authority;
-
-        // Resolution mode check:
-        // - Oracle-only: cannot use TWAP resolution at all
-        // - OracleWithTwapFallback: TWAP only after dispute window expires
-        // - Twap: always allowed
-        match market.resolution_mode {
-            ResolutionMode::Oracle => {
-                return Err(DuelError::TwapNotAllowed.into());
-            }
-            ResolutionMode::OracleWithTwapFallback => {
-                let dispute_end = market.deadline + market.oracle_dispute_window as i64;
-                require!(
-                    clock.unix_timestamp > dispute_end,
-                    DuelError::OracleDisputeWindowActive
-                );
-            }
-            ResolutionMode::Twap => {
-                // Always allowed
-            }
-        }
     }
+
+    // Validate oracle authority
+    require!(
+        ctx.accounts.oracle.key() == oracle_authority,
+        DuelError::UnauthorizedOracle
+    );
+
+    // Must not be pure TWAP mode
+    require!(
+        resolution_mode != ResolutionMode::Twap,
+        DuelError::OracleNotAllowed
+    );
 
     // Must be past deadline
     require!(clock.unix_timestamp >= deadline, DuelError::MarketNotExpired);
@@ -127,83 +117,20 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
     // Must not already be resolved
     require!(status != MarketStatus::Resolved, DuelError::MarketAlreadyResolved);
 
-    // Must have sufficient TWAP samples
-    let min_samples = (twap_window / twap_interval).max(1) as u32;
-    require!(twap_samples_count >= min_samples, DuelError::NoTwapSamples);
-
-    let samples = twap_samples_count as u128;
-
-    // Calculate final TWAPs
-    let final_twap_a = ctx.accounts.side_a
-        .twap_accumulator
-        .checked_div(samples)
-        .ok_or(DuelError::MathOverflow)? as u64;
-    let final_twap_b = ctx.accounts.side_b
-        .twap_accumulator
-        .checked_div(samples)
-        .ok_or(DuelError::MathOverflow)? as u64;
-
-    // Check for draw
-    let is_draw = if min_twap_spread_bps > 0 {
-        let higher = final_twap_a.max(final_twap_b);
-        let lower = final_twap_a.min(final_twap_b);
-        if higher == 0 {
-            true
-        } else {
-            let spread_bps = ((higher - lower) as u128)
-                .checked_mul(BPS_DENOMINATOR as u128)
-                .ok_or(DuelError::MathOverflow)?
-                .checked_div(higher as u128)
-                .ok_or(DuelError::MathOverflow)? as u16;
-            spread_bps < min_twap_spread_bps
-        }
-    } else {
-        final_twap_a == final_twap_b && {
-            let reserve_a = ctx.accounts.quote_vault_a.amount;
-            let reserve_b = ctx.accounts.quote_vault_b.amount;
-            reserve_a == reserve_b
-        }
-    };
-
-    if is_draw {
-        let market = &mut ctx.accounts.market;
-        market.status = MarketStatus::Resolved;
-        market.winner = None;
-        market.final_twap_a = final_twap_a;
-        market.final_twap_b = final_twap_b;
-
-        emit!(MarketResolved {
-            market: market_key,
-            winner: 255,
-            is_draw: true,
-            final_twap_a,
-            final_twap_b,
-            transfer_amount: 0,
-            protocol_fee: 0,
-            creator_fee: 0,
-        });
-
-        return Ok(());
+    // Must be within dispute window (for oracle mode)
+    if oracle_dispute_window > 0 {
+        let dispute_end = deadline + oracle_dispute_window as i64;
+        require!(
+            clock.unix_timestamp <= dispute_end,
+            DuelError::OracleDisputeWindowActive
+        );
     }
 
-    // Determine winner
-    let winner: u8;
-    if final_twap_a > final_twap_b {
-        winner = 0;
-    } else if final_twap_b > final_twap_a {
-        winner = 1;
-    } else {
-        let reserve_a = ctx.accounts.quote_vault_a.amount;
-        let reserve_b = ctx.accounts.quote_vault_b.amount;
-        if reserve_a >= reserve_b {
-            winner = 0;
-        } else {
-            winner = 1;
-        }
-    }
+    // Validate winning side
+    require!(winning_side <= 1, DuelError::InvalidWinningSide);
 
-    // Calculate transfer amounts
-    let losing_reserve = if winner == 0 {
+    // Calculate transfer amounts (same logic as TWAP resolution)
+    let losing_reserve = if winning_side == 0 {
         ctx.accounts.quote_vault_b.amount
     } else {
         ctx.accounts.quote_vault_a.amount
@@ -235,7 +162,7 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
         .checked_sub(protocol_fee)
         .ok_or(DuelError::MathOverflow)?;
 
-    // Build signer seeds (using extracted values, no borrow on market)
+    // Build signer seeds
     let signer_seeds: &[&[&[u8]]] = &[&[
         b"market",
         authority_key.as_ref(),
@@ -245,7 +172,7 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
 
     let quote_decimals = ctx.accounts.quote_mint.decimals;
 
-    let (losing_vault, winning_vault) = if winner == 0 {
+    let (losing_vault, winning_vault) = if winning_side == 0 {
         (
             ctx.accounts.quote_vault_b.to_account_info(),
             ctx.accounts.quote_vault_a.to_account_info(),
@@ -311,19 +238,20 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
         )?;
     }
 
-    // Update market state (mutable borrow only at the end)
+    // Update market state
     let market = &mut ctx.accounts.market;
     market.status = MarketStatus::Resolved;
-    market.winner = Some(winner);
-    market.final_twap_a = final_twap_a;
-    market.final_twap_b = final_twap_b;
+    market.winner = Some(winning_side);
+    // For oracle resolution, TWAPs are not used but we record 0
+    market.final_twap_a = 0;
+    market.final_twap_b = 0;
 
     emit!(MarketResolved {
         market: market_key,
-        winner,
+        winner: winning_side,
         is_draw: false,
-        final_twap_a,
-        final_twap_b,
+        final_twap_a: 0,
+        final_twap_b: 0,
         transfer_amount: transfer_to_winner,
         protocol_fee,
         creator_fee,
