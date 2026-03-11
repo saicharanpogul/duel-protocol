@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token_interface::{self, TokenAccount, TokenInterface, TransferChecked, Mint};
 
 use crate::constants::BPS_DENOMINATOR;
 use crate::errors::DuelError;
@@ -27,103 +28,133 @@ pub struct ResolveMarket<'info> {
     )]
     pub side_b: Account<'info, Side>,
 
-    /// SOL vault for Side A
+    /// Quote token mint
+    #[account(
+        constraint = quote_mint.key() == market.quote_mint @ DuelError::InvalidMarketConfig,
+    )]
+    pub quote_mint: InterfaceAccount<'info, Mint>,
+
+    /// Quote vault for Side A
     #[account(
         mut,
-        constraint = sol_vault_a.key() == side_a.sol_reserve_vault @ DuelError::InvalidSide,
+        constraint = quote_vault_a.key() == side_a.quote_reserve_vault @ DuelError::InvalidSide,
     )]
-    pub sol_vault_a: Account<'info, SolVault>,
+    pub quote_vault_a: InterfaceAccount<'info, TokenAccount>,
 
-    /// SOL vault for Side B
+    /// Quote vault for Side B
     #[account(
         mut,
-        constraint = sol_vault_b.key() == side_b.sol_reserve_vault @ DuelError::InvalidSide,
+        constraint = quote_vault_b.key() == side_b.quote_reserve_vault @ DuelError::InvalidSide,
     )]
-    pub sol_vault_b: Account<'info, SolVault>,
+    pub quote_vault_b: InterfaceAccount<'info, TokenAccount>,
 
-    /// Protocol fee recipient
+    /// Protocol fee recipient (quote token account)
     #[account(
         mut,
         constraint = protocol_fee_account.key() == market.protocol_fee_account @ DuelError::InvalidMarketConfig,
     )]
-    /// CHECK: Fee account validated by market state
-    pub protocol_fee_account: UncheckedAccount<'info>,
+    pub protocol_fee_account: InterfaceAccount<'info, TokenAccount>,
 
-    /// Creator fee recipient
+    /// Creator fee recipient (quote token account)
     #[account(
         mut,
         constraint = creator_fee_account.key() == market.creator_fee_account @ DuelError::InvalidMarketConfig,
     )]
-    /// CHECK: Fee account validated by market state
-    pub creator_fee_account: UncheckedAccount<'info>,
+    pub creator_fee_account: InterfaceAccount<'info, TokenAccount>,
 
-    pub system_program: Program<'info, System>,
+    /// Quote token program
+    pub quote_token_program: Interface<'info, TokenInterface>,
 }
 
 pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
     let clock = Clock::get()?;
-    let market = &mut ctx.accounts.market;
+
+    // Read all needed values from market immutably first
+    let market_key;
+    let deadline;
+    let status;
+    let twap_window;
+    let twap_interval;
+    let twap_samples_count;
+    let min_twap_spread_bps;
+    let battle_tax_bps;
+    let creator_fee_bps;
+    let protocol_fee_bps;
+    let market_id_bytes;
+    let bump;
+    let authority_key;
+
+    {
+        let market = &ctx.accounts.market;
+        market_key = market.key();
+        deadline = market.deadline;
+        status = market.status.clone();
+        twap_window = market.twap_window;
+        twap_interval = market.twap_interval;
+        twap_samples_count = market.twap_samples_count;
+        min_twap_spread_bps = market.min_twap_spread_bps;
+        battle_tax_bps = market.battle_tax_bps;
+        creator_fee_bps = market.creator_fee_bps;
+        protocol_fee_bps = market.protocol_fee_bps;
+        market_id_bytes = market.market_id.to_le_bytes();
+        bump = market.bump;
+        authority_key = market.authority;
+    }
 
     // Must be past deadline
-    require!(clock.unix_timestamp >= market.deadline, DuelError::MarketNotExpired);
+    require!(clock.unix_timestamp >= deadline, DuelError::MarketNotExpired);
 
     // Must not already be resolved
-    require!(market.status != MarketStatus::Resolved, DuelError::MarketAlreadyResolved);
+    require!(status != MarketStatus::Resolved, DuelError::MarketAlreadyResolved);
 
-    // Must have sufficient TWAP samples to prevent manipulation
-    let min_samples = (market.twap_window / market.twap_interval).max(1) as u32;
-    require!(market.twap_samples_count >= min_samples, DuelError::NoTwapSamples);
+    // Must have sufficient TWAP samples
+    let min_samples = (twap_window / twap_interval).max(1) as u32;
+    require!(twap_samples_count >= min_samples, DuelError::NoTwapSamples);
 
-    let samples = market.twap_samples_count as u128;
+    let samples = twap_samples_count as u128;
 
     // Calculate final TWAPs
-    let side_a = &ctx.accounts.side_a;
-    let side_b = &ctx.accounts.side_b;
-
-    let final_twap_a = side_a
+    let final_twap_a = ctx.accounts.side_a
         .twap_accumulator
         .checked_div(samples)
         .ok_or(DuelError::MathOverflow)? as u64;
-    let final_twap_b = side_b
+    let final_twap_b = ctx.accounts.side_b
         .twap_accumulator
         .checked_div(samples)
         .ok_or(DuelError::MathOverflow)? as u64;
 
-    // Check for draw: if TWAP spread is below min_twap_spread_bps threshold
-    let is_draw = if market.min_twap_spread_bps > 0 {
+    // Check for draw
+    let is_draw = if min_twap_spread_bps > 0 {
         let higher = final_twap_a.max(final_twap_b);
         let lower = final_twap_a.min(final_twap_b);
         if higher == 0 {
-            // Both zero: draw
             true
         } else {
-            // spread_bps = (higher - lower) * 10000 / higher
             let spread_bps = ((higher - lower) as u128)
                 .checked_mul(BPS_DENOMINATOR as u128)
                 .ok_or(DuelError::MathOverflow)?
                 .checked_div(higher as u128)
                 .ok_or(DuelError::MathOverflow)? as u16;
-            spread_bps < market.min_twap_spread_bps
+            spread_bps < min_twap_spread_bps
         }
     } else {
-        // No min spread: only exact tie with equal reserves is a draw
         final_twap_a == final_twap_b && {
-            let reserve_a = ctx.accounts.sol_vault_a.to_account_info().lamports();
-            let reserve_b = ctx.accounts.sol_vault_b.to_account_info().lamports();
+            let reserve_a = ctx.accounts.quote_vault_a.amount;
+            let reserve_b = ctx.accounts.quote_vault_b.amount;
             reserve_a == reserve_b
         }
     };
 
     if is_draw {
-        // Draw: no reserve transfer, both sides keep their reserves
+        let market = &mut ctx.accounts.market;
         market.status = MarketStatus::Resolved;
         market.winner = None;
         market.final_twap_a = final_twap_a;
         market.final_twap_b = final_twap_b;
 
         emit!(MarketResolved {
-            market: market.key(),
-            winner: 255, // sentinel for draw
+            market: market_key,
+            winner: 255,
             is_draw: true,
             final_twap_a,
             final_twap_b,
@@ -135,16 +166,15 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
         return Ok(());
     }
 
-    // Determine winner (higher TWAP wins; tie goes to higher reserve)
+    // Determine winner
     let winner: u8;
     if final_twap_a > final_twap_b {
         winner = 0;
     } else if final_twap_b > final_twap_a {
         winner = 1;
     } else {
-        // Exact tie: higher SOL reserve wins
-        let reserve_a = ctx.accounts.sol_vault_a.to_account_info().lamports();
-        let reserve_b = ctx.accounts.sol_vault_b.to_account_info().lamports();
+        let reserve_a = ctx.accounts.quote_vault_a.amount;
+        let reserve_b = ctx.accounts.quote_vault_b.amount;
         if reserve_a >= reserve_b {
             winner = 0;
         } else {
@@ -153,39 +183,30 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
     }
 
     // Calculate transfer amounts
-    let (losing_vault, winning_vault) = if winner == 0 {
-        (
-            &ctx.accounts.sol_vault_b,
-            &ctx.accounts.sol_vault_a,
-        )
+    let losing_reserve = if winner == 0 {
+        ctx.accounts.quote_vault_b.amount
     } else {
-        (
-            &ctx.accounts.sol_vault_a,
-            &ctx.accounts.sol_vault_b,
-        )
+        ctx.accounts.quote_vault_a.amount
     };
 
-    let losing_reserve = losing_vault.to_account_info().lamports();
     let transfer_amount = (losing_reserve as u128)
-        .checked_mul(market.battle_tax_bps as u128)
+        .checked_mul(battle_tax_bps as u128)
         .ok_or(DuelError::MathOverflow)?
         .checked_div(BPS_DENOMINATOR as u128)
         .ok_or(DuelError::MathOverflow)? as u64;
 
-    // Creator fee: deducted first from transfer_amount
     let creator_fee = (transfer_amount as u128)
-        .checked_mul(market.creator_fee_bps as u128)
+        .checked_mul(creator_fee_bps as u128)
         .ok_or(DuelError::MathOverflow)?
         .checked_div(BPS_DENOMINATOR as u128)
         .ok_or(DuelError::MathOverflow)? as u64;
 
-    // Protocol fee: deducted from remaining after creator fee
     let after_creator = transfer_amount
         .checked_sub(creator_fee)
         .ok_or(DuelError::MathOverflow)?;
 
     let protocol_fee = (after_creator as u128)
-        .checked_mul(market.protocol_fee_bps as u128)
+        .checked_mul(protocol_fee_bps as u128)
         .ok_or(DuelError::MathOverflow)?
         .checked_div(BPS_DENOMINATOR as u128)
         .ok_or(DuelError::MathOverflow)? as u64;
@@ -194,32 +215,91 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
         .checked_sub(protocol_fee)
         .ok_or(DuelError::MathOverflow)?;
 
-    // Transfer SOL from losing vault to winning vault
+    // Build signer seeds (using extracted values, no borrow on market)
+    let signer_seeds: &[&[&[u8]]] = &[&[
+        b"market",
+        authority_key.as_ref(),
+        &market_id_bytes,
+        &[bump],
+    ]];
+
+    let quote_decimals = ctx.accounts.quote_mint.decimals;
+
+    let (losing_vault, winning_vault) = if winner == 0 {
+        (
+            ctx.accounts.quote_vault_b.to_account_info(),
+            ctx.accounts.quote_vault_a.to_account_info(),
+        )
+    } else {
+        (
+            ctx.accounts.quote_vault_a.to_account_info(),
+            ctx.accounts.quote_vault_b.to_account_info(),
+        )
+    };
+
+    // Transfer quote tokens from losing vault to winning vault
     if transfer_to_winner > 0 {
-        **losing_vault.to_account_info().try_borrow_mut_lamports()? -= transfer_to_winner;
-        **winning_vault.to_account_info().try_borrow_mut_lamports()? += transfer_to_winner;
+        token_interface::transfer_checked(
+            CpiContext::new_with_signer(
+                ctx.accounts.quote_token_program.to_account_info(),
+                TransferChecked {
+                    from: losing_vault.clone(),
+                    mint: ctx.accounts.quote_mint.to_account_info(),
+                    to: winning_vault.clone(),
+                    authority: ctx.accounts.market.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            transfer_to_winner,
+            quote_decimals,
+        )?;
     }
 
     // Transfer creator fee
     if creator_fee > 0 {
-        **losing_vault.to_account_info().try_borrow_mut_lamports()? -= creator_fee;
-        **ctx.accounts.creator_fee_account.to_account_info().try_borrow_mut_lamports()? += creator_fee;
+        token_interface::transfer_checked(
+            CpiContext::new_with_signer(
+                ctx.accounts.quote_token_program.to_account_info(),
+                TransferChecked {
+                    from: losing_vault.clone(),
+                    mint: ctx.accounts.quote_mint.to_account_info(),
+                    to: ctx.accounts.creator_fee_account.to_account_info(),
+                    authority: ctx.accounts.market.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            creator_fee,
+            quote_decimals,
+        )?;
     }
 
     // Transfer protocol fee
     if protocol_fee > 0 {
-        **losing_vault.to_account_info().try_borrow_mut_lamports()? -= protocol_fee;
-        **ctx.accounts.protocol_fee_account.to_account_info().try_borrow_mut_lamports()? += protocol_fee;
+        token_interface::transfer_checked(
+            CpiContext::new_with_signer(
+                ctx.accounts.quote_token_program.to_account_info(),
+                TransferChecked {
+                    from: losing_vault.clone(),
+                    mint: ctx.accounts.quote_mint.to_account_info(),
+                    to: ctx.accounts.protocol_fee_account.to_account_info(),
+                    authority: ctx.accounts.market.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            protocol_fee,
+            quote_decimals,
+        )?;
     }
 
-    // Update market state
+    // Update market state (mutable borrow only at the end)
+    let market = &mut ctx.accounts.market;
     market.status = MarketStatus::Resolved;
     market.winner = Some(winner);
     market.final_twap_a = final_twap_a;
     market.final_twap_b = final_twap_b;
 
     emit!(MarketResolved {
-        market: market.key(),
+        market: market_key,
         winner,
         is_draw: false,
         final_twap_a,
@@ -231,4 +311,3 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
 
     Ok(())
 }
-

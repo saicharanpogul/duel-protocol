@@ -57,14 +57,14 @@ export function findTokenVaultPda(
 }
 
 /**
- * Derive a SOL Vault PDA.
+ * Derive a Quote Vault PDA (holds WSOL, USDC, etc.).
  */
-export function findSolVaultPda(
+export function findQuoteVaultPda(
   market: PublicKey,
   sideIndex: number
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("sol_vault"), market.toBuffer(), Buffer.from([sideIndex])],
+    [Buffer.from("quote_vault"), market.toBuffer(), Buffer.from([sideIndex])],
     PROGRAM_ID
   );
 }
@@ -80,8 +80,8 @@ export function deriveMarketAccounts(creator: PublicKey, marketId: number | bigi
   const [mintB] = findMintPda(market, 1);
   const [tokenVaultA] = findTokenVaultPda(market, 0);
   const [tokenVaultB] = findTokenVaultPda(market, 1);
-  const [solVaultA] = findSolVaultPda(market, 0);
-  const [solVaultB] = findSolVaultPda(market, 1);
+  const [quoteVaultA] = findQuoteVaultPda(market, 0);
+  const [quoteVaultB] = findQuoteVaultPda(market, 1);
 
   return {
     market,
@@ -91,8 +91,8 @@ export function deriveMarketAccounts(creator: PublicKey, marketId: number | bigi
     mintB,
     tokenVaultA,
     tokenVaultB,
-    solVaultA,
-    solVaultB,
+    quoteVaultA,
+    quoteVaultB,
   };
 }
 

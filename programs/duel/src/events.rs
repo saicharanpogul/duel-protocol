@@ -6,6 +6,8 @@ pub struct MarketCreated {
     pub authority: Pubkey,
     pub deadline: i64,
     pub battle_tax_bps: u16,
+    pub market_id: u64,
+    pub quote_mint: Pubkey,
 }
 
 #[event]

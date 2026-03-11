@@ -85,25 +85,35 @@ pub struct InitializeMarket<'info> {
     )]
     pub token_vault_b: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// SOL vault for Side A (program-owned PDA)
-    #[account(
-        init,
-        payer = creator,
-        space = SolVault::SIZE,
-        seeds = [b"sol_vault", market.key().as_ref(), &[0u8]],
-        bump,
-    )]
-    pub sol_vault_a: Account<'info, SolVault>,
+    /// Quote token mint (WSOL, USDC, etc.)
+    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    /// SOL vault for Side B (program-owned PDA)
+    /// Quote token program (may differ from side token program for Token-2022)
+    pub quote_token_program: Interface<'info, TokenInterface>,
+
+    /// Quote vault for Side A
     #[account(
         init,
         payer = creator,
-        space = SolVault::SIZE,
-        seeds = [b"sol_vault", market.key().as_ref(), &[1u8]],
+        token::mint = quote_mint,
+        token::authority = market,
+        token::token_program = quote_token_program,
+        seeds = [b"quote_vault", market.key().as_ref(), &[0u8]],
         bump,
     )]
-    pub sol_vault_b: Account<'info, SolVault>,
+    pub quote_vault_a: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// Quote vault for Side B
+    #[account(
+        init,
+        payer = creator,
+        token::mint = quote_mint,
+        token::authority = market,
+        token::token_program = quote_token_program,
+        seeds = [b"quote_vault", market.key().as_ref(), &[1u8]],
+        bump,
+    )]
+    pub quote_vault_b: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// CHECK: Arbitrary fee account, no validation needed
     pub protocol_fee_account: UncheckedAccount<'info>,
@@ -231,6 +241,7 @@ pub fn handler(
     market.market_id = market_id;
     market.side_a = side_a.key();
     market.side_b = side_b.key();
+    market.quote_mint = ctx.accounts.quote_mint.key();
     market.deadline = deadline;
     market.twap_window = twap_window;
     market.twap_interval = twap_interval;
@@ -253,6 +264,7 @@ pub fn handler(
     market.graduated_a = false;
     market.graduated_b = false;
     market.lp_lock_mode = lp_lock_mode;
+    market.locked = false;
     market.bump = ctx.bumps.market;
 
     // Initialize Side A
@@ -260,7 +272,7 @@ pub fn handler(
     side_a.side_index = 0;
     side_a.token_mint = ctx.accounts.token_mint_a.key();
     side_a.token_reserve_vault = ctx.accounts.token_vault_a.key();
-    side_a.sol_reserve_vault = ctx.accounts.sol_vault_a.key();
+    side_a.quote_reserve_vault = ctx.accounts.quote_vault_a.key();
     side_a.total_supply = total_supply_per_side;
     side_a.circulating_supply = 0;
     side_a.peak_reserve = 0;
@@ -273,7 +285,7 @@ pub fn handler(
     side_b.side_index = 1;
     side_b.token_mint = ctx.accounts.token_mint_b.key();
     side_b.token_reserve_vault = ctx.accounts.token_vault_b.key();
-    side_b.sol_reserve_vault = ctx.accounts.sol_vault_b.key();
+    side_b.quote_reserve_vault = ctx.accounts.quote_vault_b.key();
     side_b.total_supply = total_supply_per_side;
     side_b.circulating_supply = 0;
     side_b.peak_reserve = 0;
@@ -357,6 +369,8 @@ pub fn handler(
         authority: ctx.accounts.creator.key(),
         deadline,
         battle_tax_bps,
+        market_id,
+        quote_mint: ctx.accounts.quote_mint.key(),
     });
 
     Ok(())

@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::AccountMeta;
-use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
+use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 use anchor_spl::associated_token::AssociatedToken;
 
 use crate::cpi::meteora_damm;
@@ -44,12 +44,21 @@ pub struct GraduateToDex<'info> {
     )]
     pub token_vault: InterfaceAccount<'info, TokenAccount>,
 
-    /// SOL vault — checked for minimum reserve
+    /// Quote token mint
+    #[account(
+        constraint = quote_mint.key() == market.quote_mint @ DuelError::InvalidMarketConfig,
+    )]
+    pub quote_mint: InterfaceAccount<'info, Mint>,
+
+    /// Quote vault — checked for minimum reserve
     #[account(
         mut,
-        constraint = sol_vault.key() == side_account.sol_reserve_vault @ DuelError::InvalidSide,
+        constraint = quote_vault.key() == side_account.quote_reserve_vault @ DuelError::InvalidSide,
     )]
-    pub sol_vault: Account<'info, SolVault>,
+    pub quote_vault: InterfaceAccount<'info, TokenAccount>,
+
+    /// Quote token program
+    pub quote_token_program: Interface<'info, TokenInterface>,
 
     // ──── Meteora DAMM v2 accounts ────
 
@@ -146,10 +155,9 @@ pub fn handler(ctx: Context<GraduateToDex>, side: u8) -> Result<()> {
     require!(!already_graduated, DuelError::AlreadyGraduated);
 
     // Check minimum reserve
-    let sol_balance = ctx.accounts.sol_vault.to_account_info().lamports();
-    let rent_exempt = Rent::get()?.minimum_balance(SolVault::SIZE);
-    let available_sol = sol_balance.saturating_sub(rent_exempt);
-    require!(available_sol >= MIN_GRADUATION_RESERVE, DuelError::InsufficientReserve);
+    // Check minimum reserve (in quote tokens)
+    let available_quote = ctx.accounts.quote_vault.amount;
+    require!(available_quote >= MIN_GRADUATION_RESERVE, DuelError::InsufficientReserve);
 
     // Get remaining tokens in vault
     let tokens_available = ctx.accounts.token_vault.amount;
@@ -190,10 +198,10 @@ pub fn handler(ctx: Context<GraduateToDex>, side: u8) -> Result<()> {
     // After the Meteora CPI, the program refunds sol_vault balance to authority.
 
     // ─── Compute sqrt_price for the pool ───
-    let sqrt_price = compute_sqrt_price_q64(available_sol, tokens_available);
+    let sqrt_price = compute_sqrt_price_q64(available_quote, tokens_available);
 
     // Use max liquidity from the seed amounts
-    let liquidity = compute_initial_liquidity(available_sol, tokens_available, sqrt_price);
+    let liquidity = compute_initial_liquidity(available_quote, tokens_available, sqrt_price);
 
     let params = meteora_damm::InitializeCustomizablePoolParameters::with_simple_fee(
         25, // 0.25% trade fee
@@ -253,10 +261,27 @@ pub fn handler(ctx: Context<GraduateToDex>, side: u8) -> Result<()> {
         signer_seeds,
     )?;
 
-    // ─── Refund SOL vault balance to authority ───
-    let refund_amount = available_sol;
-    **ctx.accounts.sol_vault.to_account_info().try_borrow_mut_lamports()? -= refund_amount;
-    **ctx.accounts.authority.to_account_info().try_borrow_mut_lamports()? += refund_amount;
+    // ─── Transfer remaining quote tokens from vault to authority ───
+    // First transfer quote tokens to payer_token_b (for Meteora pool seeding)
+    // Then close the quote vault
+    let remaining_quote = ctx.accounts.quote_vault.amount;
+    if remaining_quote > 0 {
+        let quote_decimals = ctx.accounts.quote_mint.decimals;
+        token_interface::transfer_checked(
+            CpiContext::new_with_signer(
+                ctx.accounts.quote_token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.quote_vault.to_account_info(),
+                    mint: ctx.accounts.quote_mint.to_account_info(),
+                    to: ctx.accounts.payer_token_b.to_account_info(),
+                    authority: ctx.accounts.market.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            remaining_quote,
+            quote_decimals,
+        )?;
+    }
 
     // Mark side as graduated
     let market = &mut ctx.accounts.market;
@@ -270,7 +295,7 @@ pub fn handler(ctx: Context<GraduateToDex>, side: u8) -> Result<()> {
         market: market.key(),
         side,
         dex_pool: ctx.accounts.pool.key(),
-        sol_seeded: available_sol,
+        sol_seeded: available_quote,
         tokens_seeded: tokens_available,
     });
 

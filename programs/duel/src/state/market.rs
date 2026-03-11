@@ -29,6 +29,8 @@ pub struct Market {
     pub side_a: Pubkey,
     /// Side B PDA
     pub side_b: Pubkey,
+    /// Quote token mint (WSOL, USDC, etc.)
+    pub quote_mint: Pubkey,
     /// Unix timestamp deadline
     pub deadline: i64,
     /// TWAP observation window in seconds
@@ -61,7 +63,7 @@ pub struct Market {
     pub last_sample_ts: i64,
     /// Winner side index (0 = A, 1 = B), None if not resolved or draw
     pub winner: Option<u8>,
-    /// Final TWAP for side A (lamports, price * 10^9 for precision)
+    /// Final TWAP for side A (quote token units, price * 10^9 for precision)
     pub final_twap_a: u64,
     /// Final TWAP for side B
     pub final_twap_b: u64,
@@ -73,6 +75,8 @@ pub struct Market {
     pub graduated_b: bool,
     /// LP lock mode (set at creation, governs post-graduation LP behavior)
     pub lp_lock_mode: LpLockMode,
+    /// Re-entrancy lock (prevents concurrent buy/sell during CPI)
+    pub locked: bool,
     /// PDA bump
     pub bump: u8,
 }
@@ -83,6 +87,7 @@ impl Market {
         + 8   // market_id
         + 32  // side_a
         + 32  // side_b
+        + 32  // quote_mint
         + 8   // deadline
         + 8   // twap_window
         + 8   // twap_interval
@@ -105,6 +110,7 @@ impl Market {
         + 1   // graduated_a
         + 1   // graduated_b
         + 1   // lp_lock_mode
+        + 1   // locked
         + 1   // bump
-        + 17; // padding (reduced for new fields)
+        + 16; // padding (reduced for new fields)
 }

@@ -124,11 +124,11 @@ pub mod duel {
         instructions::graduate_to_dex::handler(ctx, side)
     }
 
-    pub fn close_sol_vault(
-        ctx: Context<CloseSolVault>,
+    pub fn close_quote_vault(
+        ctx: Context<CloseQuoteVault>,
         side: u8,
     ) -> Result<()> {
-        instructions::close_sol_vault::handler(ctx, side)
+        instructions::close_quote_vault::handler(ctx, side)
     }
 
     pub fn claim_pool_fees(

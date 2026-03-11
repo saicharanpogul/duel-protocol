@@ -14,16 +14,6 @@ pub struct CurveParams {
     pub a: u64,
     /// Exponent (1 = linear, 2 = quadratic, 3 = cubic)
     pub n: u8,
-    /// Base price in lamports
+    /// Base price in quote token smallest units
     pub b: u64,
-}
-
-/// Zero-data account owned by the program to hold SOL reserves.
-/// Using a program-owned account allows the program to debit lamports.
-#[account]
-pub struct SolVault {}
-
-impl SolVault {
-    /// 8 bytes discriminator only
-    pub const SIZE: usize = 8;
 }

@@ -10,13 +10,13 @@ pub struct Side {
     pub token_mint: Pubkey,
     /// Vault holding unsold/returned tokens
     pub token_reserve_vault: Pubkey,
-    /// Vault holding SOL from buys
-    pub sol_reserve_vault: Pubkey,
+    /// Vault holding quote tokens (WSOL, USDC, etc.) from buys
+    pub quote_reserve_vault: Pubkey,
     /// Fixed total supply (set at creation)
     pub total_supply: u64,
     /// Tokens currently held by participants
     pub circulating_supply: u64,
-    /// Historical max SOL reserve (for sell penalty calc)
+    /// Historical max quote reserve (for sell penalty calc)
     pub peak_reserve: u64,
     /// Sum of price samples for TWAP (u128 to prevent overflow)
     pub twap_accumulator: u128,
@@ -32,7 +32,7 @@ impl Side {
         + 1   // side_index
         + 32  // token_mint
         + 32  // token_reserve_vault
-        + 32  // sol_reserve_vault
+        + 32  // quote_reserve_vault
         + 8   // total_supply
         + 8   // circulating_supply
         + 8   // peak_reserve
@@ -41,3 +41,4 @@ impl Side {
         + 1   // bump
         + 24; // padding (reduced from 32)
 }
+
