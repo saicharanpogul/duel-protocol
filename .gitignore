@@ -28,3 +28,5 @@ keypair.json
 
 # Logs
 *.log
+app/node_modules
+app/.next

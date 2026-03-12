@@ -1,0 +1,283 @@
+/* ═══════════════════════════════════════════════
+   LANDING PAGE STYLES
+   ═══════════════════════════════════════════════ */
+
+.landing {
+  min-height: 100vh;
+}
+
+/* ─── Hero ─── */
+.hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  padding: 80px 24px 40px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  animation: float 6s ease-in-out infinite;
+  opacity: 0.5;
+}
+
+.particleRed {
+  background: var(--red-pill);
+  box-shadow: 0 0 12px var(--red-pill-glow);
+}
+
+.particleBlue {
+  background: var(--blue-pill);
+  box-shadow: 0 0 12px var(--blue-pill-glow);
+}
+
+.heroContent {
+  position: relative;
+  z-index: 2;
+  max-width: 720px;
+}
+
+.heroBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+
+.heroBadgeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: pulseGlow 2s infinite;
+}
+
+.heroTitle {
+  font-family: var(--font-heading);
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin-bottom: 20px;
+}
+
+.heroTitleRed {
+  background: var(--red-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 40px var(--red-pill-glow);
+}
+
+.heroTitleBlue {
+  background: var(--blue-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 40px var(--blue-pill-glow);
+}
+
+.heroSub {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin-bottom: 32px;
+}
+
+.heroActions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ─── Pills Visualization ─── */
+.pillContainer {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  margin-top: 60px;
+  position: relative;
+  z-index: 2;
+}
+
+.pillRed,
+.pillBlue {
+  width: 160px;
+  height: 200px;
+  border-radius: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.4s;
+  cursor: pointer;
+}
+
+.pillRed {
+  background: linear-gradient(180deg, rgba(255, 45, 85, 0.15) 0%, rgba(255, 45, 85, 0.05) 100%);
+  border: 2px solid rgba(255, 45, 85, 0.3);
+  box-shadow: 0 0 40px var(--red-pill-glow), inset 0 0 30px rgba(255, 45, 85, 0.1);
+}
+
+.pillRed:hover {
+  transform: scale(1.05) translateY(-5px);
+  box-shadow: 0 0 60px var(--red-pill-glow), inset 0 0 40px rgba(255, 45, 85, 0.15);
+  border-color: rgba(255, 45, 85, 0.5);
+}
+
+.pillBlue {
+  background: linear-gradient(180deg, rgba(0, 122, 255, 0.15) 0%, rgba(0, 122, 255, 0.05) 100%);
+  border: 2px solid rgba(0, 122, 255, 0.3);
+  box-shadow: 0 0 40px var(--blue-pill-glow), inset 0 0 30px rgba(0, 122, 255, 0.1);
+}
+
+.pillBlue:hover {
+  transform: scale(1.05) translateY(-5px);
+  box-shadow: 0 0 60px var(--blue-pill-glow), inset 0 0 40px rgba(0, 122, 255, 0.15);
+  border-color: rgba(0, 122, 255, 0.5);
+}
+
+.pillInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.pillEmoji {
+  font-size: 2.5rem;
+  animation: float 3s ease-in-out infinite;
+}
+
+.pillLabel {
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.pillDesc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.pillVs {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--text-muted);
+  text-shadow: 0 0 20px var(--accent-glow);
+}
+
+/* ─── Stats Bar ─── */
+.statsBar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  max-width: 900px;
+  margin: 0 auto;
+  background: var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.statsBar > div {
+  background: var(--bg-surface);
+}
+
+/* ─── How It Works ─── */
+.howItWorks {
+  max-width: 1000px;
+  margin: 80px auto;
+  padding: 0 24px;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.step {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px 20px;
+  text-align: center;
+  transition: all 0.3s;
+}
+
+.step:hover {
+  border-color: var(--border-hover);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-card);
+}
+
+.stepIcon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+}
+
+.step h3 {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.step p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ─── Footer ─── */
+.footer {
+  text-align: center;
+  padding: 40px 24px;
+  border-top: 1px solid var(--border);
+  margin-top: 40px;
+}
+
+.footer p:first-child {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.1rem;
+  background: linear-gradient(135deg, var(--red-pill), var(--accent), var(--blue-pill));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.footerSub {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 768px) {
+  .pillContainer { gap: 16px; }
+  .pillRed, .pillBlue { width: 120px; height: 160px; }
+  .statsBar { grid-template-columns: repeat(2, 1fr); }
+  .heroActions { flex-direction: column; align-items: center; }
+}

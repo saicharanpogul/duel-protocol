@@ -1,0 +1,446 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { useParams } from "next/navigation";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { AnchorProvider } from "@coral-xyz/anchor";
+import {
+  PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
+import {
+  TOKEN_PROGRAM_ID, NATIVE_MINT, getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction, createSyncNativeInstruction,
+  getAccount,
+} from "@solana/spl-token";
+import BN from "bn.js";
+import {
+  getProgram, getReadonlyProgram, findConfigPda,
+  formatSol, formatCountdown, getMarketStatus,
+} from "../../lib/program";
+
+export default function MarketDetailPage() {
+  const params = useParams();
+  const marketPubkey = params.id as string;
+  const { connection } = useConnection();
+  const wallet = useWallet();
+
+  const [market, setMarket] = useState<any>(null);
+  const [sideA, setSideA] = useState<any>(null);
+  const [sideB, setSideB] = useState<any>(null);
+  const [reserveA, setReserveA] = useState(0);
+  const [reserveB, setReserveB] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [selectedSide, setSelectedSide] = useState<0 | 1>(0);
+  const [amount, setAmount] = useState("");
+  const [txStatus, setTxStatus] = useState<string | null>(null);
+  const [userBalanceA, setUserBalanceA] = useState(0);
+  const [userBalanceB, setUserBalanceB] = useState(0);
+  const [countdown, setCountdown] = useState("");
+
+  const fetchData = useCallback(async () => {
+    try {
+      const program = getReadonlyProgram();
+      const mk = new PublicKey(marketPubkey);
+      const marketData = await program.account.market.fetch(mk);
+      setMarket(marketData);
+
+      const sA = await program.account.side.fetch(marketData.sideA);
+      const sB = await program.account.side.fetch(marketData.sideB);
+      setSideA(sA);
+      setSideB(sB);
+
+      try {
+        const vA = await connection.getTokenAccountBalance(sA.quoteReserveVault);
+        const vB = await connection.getTokenAccountBalance(sB.quoteReserveVault);
+        setReserveA(Number(vA.value.amount));
+        setReserveB(Number(vB.value.amount));
+      } catch {}
+
+      if (wallet.publicKey) {
+        try {
+          const ataA = await getAssociatedTokenAddress(sA.tokenMint, wallet.publicKey);
+          const accA = await getAccount(connection, ataA);
+          setUserBalanceA(Number(accA.amount));
+        } catch { setUserBalanceA(0); }
+        try {
+          const ataB = await getAssociatedTokenAddress(sB.tokenMint, wallet.publicKey);
+          const accB = await getAccount(connection, ataB);
+          setUserBalanceB(Number(accB.amount));
+        } catch { setUserBalanceB(0); }
+      }
+    } catch (err) {
+      console.error("Fetch error:", err);
+    }
+    setLoading(false);
+  }, [marketPubkey, connection, wallet.publicKey]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (!market) return;
+    const id = setInterval(() => {
+      setCountdown(formatCountdown(Number(market.deadline)));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [market]);
+
+  async function handleBuy() {
+    if (!wallet.publicKey || !wallet.signTransaction || !market || !sideA || !sideB) return;
+    const solAmount = parseFloat(amount);
+    if (isNaN(solAmount) || solAmount <= 0) return;
+
+    setTxStatus("Preparing transaction...");
+    try {
+      const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
+      const program = getProgram(provider);
+      const mk = new PublicKey(marketPubkey);
+      const side = selectedSide === 0 ? sideA : sideB;
+      const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
+
+      // Wrap SOL to WSOL
+      const wsolAta = await getAssociatedTokenAddress(NATIVE_MINT, wallet.publicKey);
+      const tx = new Transaction();
+
+      try { await getAccount(connection, wsolAta); } catch {
+        tx.add(createAssociatedTokenAccountInstruction(wallet.publicKey, wsolAta, wallet.publicKey, NATIVE_MINT));
+      }
+      tx.add(
+        SystemProgram.transfer({ fromPubkey: wallet.publicKey, toPubkey: wsolAta, lamports }),
+        createSyncNativeInstruction(wsolAta)
+      );
+
+      // Create token ATA if needed
+      const tokenMint = side.tokenMint;
+      const buyerAta = await getAssociatedTokenAddress(tokenMint, wallet.publicKey);
+      try { await getAccount(connection, buyerAta); } catch {
+        tx.add(createAssociatedTokenAccountInstruction(wallet.publicKey, buyerAta, wallet.publicKey, tokenMint));
+      }
+
+      // Buy instruction
+      const buyIx = await program.methods
+        .buyTokens(selectedSide, new BN(lamports), new BN(1))
+        .accounts({
+          buyer: wallet.publicKey,
+          market: mk,
+          sideAccount: selectedSide === 0 ? market.sideA : market.sideB,
+          tokenMint,
+          tokenVault: side.tokenReserveVault,
+          buyerTokenAccount: buyerAta,
+          quoteMint: NATIVE_MINT,
+          quoteVault: side.quoteReserveVault,
+          buyerQuoteAccount: wsolAta,
+          config: findConfigPda(),
+          tokenProgram: TOKEN_PROGRAM_ID,
+          quoteTokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .instruction();
+      tx.add(buyIx);
+
+      setTxStatus("Awaiting wallet approval...");
+      const sig = await provider.sendAndConfirm(tx);
+      setTxStatus(`✅ Bought! Tx: ${sig.slice(0, 8)}...`);
+      setAmount("");
+      setTimeout(fetchData, 2000);
+    } catch (err: any) {
+      setTxStatus(`❌ ${err.message?.slice(0, 80)}`);
+    }
+  }
+
+  async function handleSell() {
+    if (!wallet.publicKey || !wallet.signTransaction || !market || !sideA || !sideB) return;
+    const tokenAmt = parseFloat(amount);
+    if (isNaN(tokenAmt) || tokenAmt <= 0) return;
+
+    setTxStatus("Preparing sell...");
+    try {
+      const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
+      const program = getProgram(provider);
+      const mk = new PublicKey(marketPubkey);
+      const side = selectedSide === 0 ? sideA : sideB;
+      const tokenMint = side.tokenMint;
+      const sellerAta = await getAssociatedTokenAddress(tokenMint, wallet.publicKey);
+      const wsolAta = await getAssociatedTokenAddress(NATIVE_MINT, wallet.publicKey);
+
+      const tx = new Transaction();
+      try { await getAccount(connection, wsolAta); } catch {
+        tx.add(createAssociatedTokenAccountInstruction(wallet.publicKey, wsolAta, wallet.publicKey, NATIVE_MINT));
+      }
+
+      const status = getMarketStatus(market);
+      const sellAmount = new BN(Math.floor(tokenAmt));
+
+      let sellIx;
+      if (status === "resolved") {
+        sellIx = await program.methods
+          .sellPostResolution(selectedSide, sellAmount, new BN(0))
+          .accounts({
+            seller: wallet.publicKey,
+            market: mk,
+            sideAccount: selectedSide === 0 ? market.sideA : market.sideB,
+            tokenMint,
+            tokenVault: side.tokenReserveVault,
+            sellerTokenAccount: sellerAta,
+            quoteMint: NATIVE_MINT,
+            quoteVault: side.quoteReserveVault,
+            sellerQuoteAccount: wsolAta,
+            config: findConfigPda(),
+            tokenProgram: TOKEN_PROGRAM_ID,
+            quoteTokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .instruction();
+      } else {
+        sellIx = await program.methods
+          .sellTokens(selectedSide, sellAmount, new BN(1))
+          .accounts({
+            seller: wallet.publicKey,
+            market: mk,
+            sideAccount: selectedSide === 0 ? market.sideA : market.sideB,
+            tokenMint,
+            tokenVault: side.tokenReserveVault,
+            sellerTokenAccount: sellerAta,
+            quoteMint: NATIVE_MINT,
+            quoteVault: side.quoteReserveVault,
+            sellerQuoteAccount: wsolAta,
+            config: findConfigPda(),
+            tokenProgram: TOKEN_PROGRAM_ID,
+            quoteTokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .instruction();
+      }
+
+      tx.add(sellIx);
+      setTxStatus("Awaiting wallet approval...");
+      const sig = await provider.sendAndConfirm(tx);
+      setTxStatus(`✅ Sold! Tx: ${sig.slice(0, 8)}...`);
+      setAmount("");
+      setTimeout(fetchData, 2000);
+    } catch (err: any) {
+      setTxStatus(`❌ ${err.message?.slice(0, 80)}`);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="page-container">
+        <div className="skeleton" style={{ height: 400, marginBottom: 24 }} />
+        <div className="skeleton" style={{ height: 200 }} />
+      </div>
+    );
+  }
+
+  if (!market) {
+    return (
+      <div className="page-container" style={{ textAlign: "center", padding: "120px 0" }}>
+        <h2>Market not found</h2>
+        <p style={{ color: "var(--text-secondary)" }}>Check the URL and try again.</p>
+      </div>
+    );
+  }
+
+  const status = getMarketStatus(market);
+  const totalReserve = reserveA + reserveB;
+  const pctA = totalReserve > 0 ? (reserveA / totalReserve) * 100 : 50;
+  const pctB = 100 - pctA;
+
+  return (
+    <div className="page-container">
+      {/* ─── Header ─── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }} className="animate-fadeInUp">
+        <div>
+          <span className={`pill-badge ${status === "active" ? "pill-badge-active" : status === "twap" ? "pill-badge-twap" : "pill-badge-resolved"}`}>
+            {status === "active" ? "⚡ Live" : status === "twap" ? "📊 TWAP Active" : "🏁 Resolved"}
+          </span>
+          <span style={{ marginLeft: 12, fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+            {countdown || formatCountdown(Number(market.deadline))}
+          </span>
+        </div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+          {marketPubkey.slice(0, 6)}...{marketPubkey.slice(-4)}
+        </div>
+      </div>
+
+      {/* ─── VS Header ─── */}
+      <div className="animate-fadeInUp animate-delay-1" style={{
+        display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 24,
+        alignItems: "center", marginBottom: 32,
+      }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "2.5rem", marginBottom: 8 }}>🔴</div>
+          <h2 style={{ fontFamily: "var(--font-heading)", fontSize: "1.5rem", fontWeight: 800, color: "var(--text-red)" }}>
+            {market.nameA}
+          </h2>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+            ${market.symbolA}
+          </div>
+        </div>
+
+        <div style={{
+          fontFamily: "var(--font-heading)", fontSize: "1.5rem", fontWeight: 900,
+          color: "var(--text-muted)", textShadow: "0 0 20px var(--accent-glow)",
+        }}>
+          VS
+        </div>
+
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "2.5rem", marginBottom: 8 }}>🔵</div>
+          <h2 style={{ fontFamily: "var(--font-heading)", fontSize: "1.5rem", fontWeight: 800, color: "var(--text-blue)" }}>
+            {market.nameB}
+          </h2>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+            ${market.symbolB}
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Sentiment Bar ─── */}
+      <div className="animate-fadeInUp animate-delay-2" style={{ marginBottom: 32 }}>
+        <div className="sentiment-bar" style={{ height: 14, borderRadius: 7, marginBottom: 8 }}>
+          <div className="sentiment-bar-red" style={{ width: `${pctA}%` }} />
+          <div className="sentiment-bar-blue" style={{ width: `${pctB}%` }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem" }}>
+          <span style={{ color: "var(--text-red)", fontWeight: 600 }}>{pctA.toFixed(1)}% · {formatSol(reserveA)} SOL</span>
+          <span style={{ color: "var(--text-blue)", fontWeight: 600 }}>{formatSol(reserveB)} SOL · {pctB.toFixed(1)}%</span>
+        </div>
+      </div>
+
+      {/* ─── Winner Banner ─── */}
+      {market.winner !== null && market.winner !== undefined && (
+        <div className="animate-fadeInUp" style={{
+          padding: "20px 24px", borderRadius: "var(--radius-lg)", marginBottom: 32,
+          background: market.winner === 0 ? "rgba(255, 45, 85, 0.1)" : "rgba(0, 122, 255, 0.1)",
+          border: `1px solid ${market.winner === 0 ? "rgba(255, 45, 85, 0.3)" : "rgba(0, 122, 255, 0.3)"}`,
+          textAlign: "center",
+        }}>
+          <div style={{ fontSize: "2rem", marginBottom: 8 }}>🏆</div>
+          <h3 style={{ fontFamily: "var(--font-heading)", fontWeight: 800, marginBottom: 4,
+            color: market.winner === 0 ? "var(--text-red)" : "var(--text-blue)" }}>
+            {market.winner === 0 ? market.nameA : market.nameB} Wins!
+          </h3>
+          <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+            Battle tax has been redistributed to the winning side.
+          </p>
+        </div>
+      )}
+
+      {/* ─── Trade Panel ─── */}
+      <div className="card animate-fadeInUp animate-delay-3" style={{ maxWidth: 500, margin: "0 auto" }}>
+        <h3 style={{ fontFamily: "var(--font-heading)", fontSize: "1.1rem", fontWeight: 700, marginBottom: 20 }}>
+          Trade
+        </h3>
+
+        {/* Side selector */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
+          <button
+            className={`btn ${selectedSide === 0 ? "btn-red" : "btn-ghost"}`}
+            onClick={() => setSelectedSide(0)}
+            style={{ width: "100%" }}
+          >
+            🔴 {market.nameA}
+          </button>
+          <button
+            className={`btn ${selectedSide === 1 ? "btn-blue" : "btn-ghost"}`}
+            onClick={() => setSelectedSide(1)}
+            style={{ width: "100%" }}
+          >
+            🔵 {market.nameB}
+          </button>
+        </div>
+
+        {/* User balance */}
+        {wallet.publicKey && (
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+            <span>Your {selectedSide === 0 ? market.symbolA : market.symbolB} tokens:</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>
+              {(selectedSide === 0 ? userBalanceA : userBalanceB).toLocaleString()}
+            </span>
+          </div>
+        )}
+
+        {/* Amount input */}
+        <input
+          type="number"
+          className="input"
+          placeholder={status === "resolved" ? "Token amount to sell" : "SOL amount to buy"}
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          step="0.01"
+          min="0"
+          style={{ marginBottom: 16 }}
+        />
+
+        {/* Quick amounts */}
+        {status !== "resolved" && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            {[0.1, 0.5, 1, 5].map((a) => (
+              <button key={a} className="btn btn-ghost btn-sm" onClick={() => setAmount(String(a))} style={{ flex: 1 }}>
+                {a} SOL
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <button
+            className={`btn ${selectedSide === 0 ? "btn-red" : "btn-blue"}`}
+            onClick={handleBuy}
+            disabled={!wallet.publicKey || status === "resolved"}
+            style={{ width: "100%" }}
+          >
+            Buy {selectedSide === 0 ? market.symbolA : market.symbolB}
+          </button>
+          <button
+            className="btn btn-ghost"
+            onClick={handleSell}
+            disabled={!wallet.publicKey}
+            style={{ width: "100%" }}
+          >
+            Sell
+          </button>
+        </div>
+
+        {/* Tx status */}
+        {txStatus && (
+          <div style={{
+            marginTop: 16, padding: "10px 14px", borderRadius: "var(--radius-md)",
+            background: "var(--bg-surface-2)", fontSize: "0.8rem",
+            fontFamily: "var(--font-mono)", color: "var(--text-secondary)",
+          }}>
+            {txStatus}
+          </div>
+        )}
+
+        {!wallet.publicKey && (
+          <p style={{ textAlign: "center", marginTop: 16, fontSize: "0.8rem", color: "var(--text-muted)" }}>
+            Connect wallet to trade
+          </p>
+        )}
+      </div>
+
+      {/* ─── Market Info ─── */}
+      <div className="card animate-fadeInUp animate-delay-4" style={{ marginTop: 24 }}>
+        <h3 style={{ fontFamily: "var(--font-heading)", fontSize: "1rem", fontWeight: 700, marginBottom: 16 }}>
+          Market Details
+        </h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+          {[
+            ["Battle Tax", `${market.battleTaxBps / 100}%`],
+            ["Protocol Fee", `${market.protocolFeeBps / 100}%`],
+            ["Sell Penalty Max", `${market.sellPenaltyMaxBps / 100}%`],
+            ["TWAP Window", `${Number(market.twapWindow)}s`],
+            ["TWAP Interval", `${Number(market.twapInterval)}s`],
+            ["TWAP Samples", `${market.twapSamplesCount}`],
+            ["Circulating A", sideA ? sideA.circulatingSupply.toNumber().toLocaleString() : "—"],
+            ["Circulating B", sideB ? sideB.circulatingSupply.toNumber().toLocaleString() : "—"],
+          ].map(([label, value]) => (
+            <div key={label as string} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+              <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{label}</span>
+              <span style={{ fontSize: "0.8rem", fontFamily: "var(--font-mono)", fontWeight: 600 }}>{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
