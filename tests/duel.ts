@@ -7,12 +7,16 @@ import {
   SystemProgram,
   LAMPORTS_PER_SOL,
   ComputeBudgetProgram,
+  Transaction,
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
+  NATIVE_MINT,
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
+  createSyncNativeInstruction,
   getAccount,
+  closeAccount,
 } from "@solana/spl-token";
 import { expect } from "chai";
 import BN from "bn.js";
@@ -27,8 +31,35 @@ function findMetadataPda(mint: PublicKey): PublicKey {
   return pda;
 }
 
-// Rent-exempt minimum for a 0-data account
-const RENT_EXEMPT_MIN = 890_880;
+/**
+ * Wrap SOL into a WSOL ATA for the given owner.
+ * Creates the ATA if it doesn't exist, transfers lamports, and syncs.
+ */
+async function wrapSol(
+  provider: anchor.AnchorProvider,
+  owner: PublicKey,
+  amount: number
+): Promise<PublicKey> {
+  const ata = await getAssociatedTokenAddress(NATIVE_MINT, owner);
+
+  const tx = new Transaction();
+
+  // Create ATA if it doesn't exist
+  try {
+    await getAccount(provider.connection, ata);
+  } catch {
+    tx.add(createAssociatedTokenAccountInstruction(owner, ata, owner, NATIVE_MINT));
+  }
+
+  // Transfer SOL and sync to make it WSOL
+  tx.add(
+    SystemProgram.transfer({ fromPubkey: owner, toPubkey: ata, lamports: amount })
+  );
+  tx.add(createSyncNativeInstruction(ata));
+  await provider.sendAndConfirm(tx);
+
+  return ata;
+}
 
 describe("duel", () => {
   const provider = anchor.AnchorProvider.env();
@@ -54,10 +85,13 @@ describe("duel", () => {
   let mintB: PublicKey;
   let tokenVaultA: PublicKey;
   let tokenVaultB: PublicKey;
-  let solVaultA: PublicKey;
-  let solVaultB: PublicKey;
-  let protocolFeeAccount: Keypair;
+  let quoteVaultA: PublicKey;
+  let quoteVaultB: PublicKey;
+  let protocolFeeAccount: PublicKey; // now a WSOL token account
+  let protocolFeeOwner: Keypair;
+  let creatorFeeAccount: PublicKey; // WSOL token account for creator fees
   let configPda: PublicKey;
+  let creatorWsolAta: PublicKey;
 
   before(async () => {
     [marketPda] = PublicKey.findProgramAddressSync(
@@ -93,55 +127,82 @@ describe("duel", () => {
       [Buffer.from("token_vault"), marketPda.toBuffer(), Buffer.from([1])],
       program.programId
     );
-    [solVaultA] = PublicKey.findProgramAddressSync(
-      [Buffer.from("sol_vault"), marketPda.toBuffer(), Buffer.from([0])],
+    // New: quote vault PDAs
+    [quoteVaultA] = PublicKey.findProgramAddressSync(
+      [Buffer.from("quote_vault"), marketPda.toBuffer(), Buffer.from([0])],
       program.programId
     );
-    [solVaultB] = PublicKey.findProgramAddressSync(
-      [Buffer.from("sol_vault"), marketPda.toBuffer(), Buffer.from([1])],
+    [quoteVaultB] = PublicKey.findProgramAddressSync(
+      [Buffer.from("quote_vault"), marketPda.toBuffer(), Buffer.from([1])],
       program.programId
     );
-    protocolFeeAccount = Keypair.generate();
 
     [configPda] = PublicKey.findProgramAddressSync(
       [Buffer.from("config")],
       program.programId
     );
 
+    // Create protocol fee owner + their WSOL ATA for receiving fees
+    protocolFeeOwner = Keypair.generate();
+    protocolFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, protocolFeeOwner.publicKey);
+
+    // Fund protocol fee owner so they can create ATA
+    const fundTx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: creator.publicKey,
+        toPubkey: protocolFeeOwner.publicKey,
+        lamports: LAMPORTS_PER_SOL / 10,
+      })
+    );
+    await provider.sendAndConfirm(fundTx);
+
+    // Create protocol fee WSOL ATA
+    const createProtocolAtaTx = new Transaction().add(
+      createAssociatedTokenAccountInstruction(
+        protocolFeeOwner.publicKey,
+        protocolFeeAccount,
+        protocolFeeOwner.publicKey,
+        NATIVE_MINT
+      )
+    );
+    await provider.sendAndConfirm(createProtocolAtaTx, [protocolFeeOwner]);
+
+    // Create creator fee WSOL ATA
+    creatorFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, creator.publicKey);
+    try {
+      await getAccount(provider.connection, creatorFeeAccount);
+    } catch {
+      const createCreatorAtaTx = new Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          creator.publicKey,
+          creatorFeeAccount,
+          creator.publicKey,
+          NATIVE_MINT
+        )
+      );
+      await provider.sendAndConfirm(createCreatorAtaTx);
+    }
+
+    // Create creator WSOL ATA (for buying/selling)
+    creatorWsolAta = creatorFeeAccount; // same ATA
+
     // Initialize ProgramConfig (once)
     try {
       await program.account.programConfig.fetch(configPda);
     } catch {
-      await prefundPda(protocolFeeAccount.publicKey);
       await program.methods
         .initializeConfig(125, new BN(0))
         .accounts({
           admin: creator.publicKey,
-          config: configPda,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount,
           systemProgram: SystemProgram.programId,
-        })
+        } as any)
         .rpc();
     }
   });
 
-  // Helper: pre-fund a PDA so it's rent-exempt
-  async function prefundPda(pda: PublicKey) {
-    const tx = new anchor.web3.Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: creator.publicKey,
-        toPubkey: pda,
-        lamports: RENT_EXEMPT_MIN,
-      })
-    );
-    await provider.sendAndConfirm(tx);
-  }
-
   describe("initialize_market", () => {
     it("should create a market with valid params", async () => {
-      // Pre-fund protocol fee account so it's rent-exempt
-      await prefundPda(protocolFeeAccount.publicKey);
-
       const now = Math.floor(Date.now() / 1000);
       const deadline = now + 3600;
       const twapWindow = 600;
@@ -173,6 +234,9 @@ describe("duel", () => {
           new BN(0),  // maxObservationChangePerUpdate (disabled)
           0,          // minTwapSpreadBps (any difference resolves)
           200,        // creatorFeeBps (2%)
+          { twap: {} }, // resolutionMode: TWAP
+          PublicKey.default, // oracleAuthority (unused for TWAP)
+          new BN(0),  // oracleDisputeWindow (unused for TWAP)
         )
         .accounts({
           creator: creator.publicKey,
@@ -183,9 +247,12 @@ describe("duel", () => {
           tokenMintB: mintB,
           tokenVaultA: tokenVaultA,
           tokenVaultB: tokenVaultB,
-          solVaultA: solVaultA,
-          solVaultB: solVaultB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          quoteMint: NATIVE_MINT,
+          quoteTokenProgram: TOKEN_PROGRAM_ID,
+          quoteVaultA: quoteVaultA,
+          quoteVaultB: quoteVaultB,
+          protocolFeeAccount: protocolFeeAccount,
+          creatorFeeAccount: creatorFeeAccount,
           config: configPda,
           metadataA: findMetadataPda(mintA),
           metadataB: findMetadataPda(mintB),
@@ -208,12 +275,15 @@ describe("duel", () => {
       expect(market.status).to.deep.equal({ active: {} });
       expect(market.twapSamplesCount).to.equal(0);
       expect(market.winner).to.be.null;
+      expect(market.quoteMint.toString()).to.equal(NATIVE_MINT.toString());
+      expect(market.resolutionMode).to.deep.equal({ twap: {} });
 
       // Verify sides
       const sideA = await program.account.side.fetch(sideAPda);
       expect(sideA.sideIndex).to.equal(0);
       expect(sideA.totalSupply.toNumber()).to.equal(1_000_000_000);
       expect(sideA.circulatingSupply.toNumber()).to.equal(0);
+      expect(sideA.quoteReserveVault.toString()).to.equal(quoteVaultA.toString());
 
       // Verify token vaults
       const vaultA = await getAccount(provider.connection, tokenVaultA);
@@ -229,16 +299,19 @@ describe("duel", () => {
       const createAtaIx = createAssociatedTokenAccountInstruction(
         creator.publicKey, buyerTokenAccountA, creator.publicKey, mintA
       );
-      const tx = new anchor.web3.Transaction().add(createAtaIx);
+      const tx = new Transaction().add(createAtaIx);
       await provider.sendAndConfirm(tx);
     });
 
     it("should buy tokens on Side A", async () => {
-      const solAmount = new BN(LAMPORTS_PER_SOL); // 1 SOL
-      const minTokensOut = new BN(1);
+      const solAmount = LAMPORTS_PER_SOL; // 1 SOL
 
+      // Wrap SOL to WSOL
+      await wrapSol(provider, creator.publicKey, solAmount);
+
+      const minTokensOut = new BN(1);
       const tx = await program.methods
-        .buyTokens(0, solAmount, minTokensOut)
+        .buyTokens(0, new BN(solAmount), minTokensOut)
         .accounts({
           buyer: creator.publicKey,
           market: marketPda,
@@ -246,10 +319,12 @@ describe("duel", () => {
           tokenMint: mintA,
           tokenVault: tokenVaultA,
           buyerTokenAccount: buyerTokenAccountA,
-          solVault: solVaultA,
+          quoteMint: NATIVE_MINT,
+          quoteVault: quoteVaultA,
+          buyerQuoteAccount: creatorWsolAta,
           config: configPda,
-          systemProgram: SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
+          quoteTokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -276,12 +351,13 @@ describe("duel", () => {
 
       // Sell half
       const tokenAmount = new BN(Math.floor(tokensHeld / 2));
-      const minSolOut = new BN(1);
+      const minQuoteOut = new BN(1);
 
-      const balBefore = await provider.connection.getBalance(creator.publicKey);
+      const wsolBefore = await getAccount(provider.connection, creatorWsolAta);
+      const wsolBalBefore = Number(wsolBefore.amount);
 
       const tx = await program.methods
-        .sellTokens(0, tokenAmount, minSolOut)
+        .sellTokens(0, tokenAmount, minQuoteOut)
         .accounts({
           seller: creator.publicKey,
           market: marketPda,
@@ -289,10 +365,12 @@ describe("duel", () => {
           tokenMint: mintA,
           tokenVault: tokenVaultA,
           sellerTokenAccount: buyerTokenAccountA,
-          solVault: solVaultA,
+          quoteMint: NATIVE_MINT,
+          quoteVault: quoteVaultA,
+          sellerQuoteAccount: creatorWsolAta,
           config: configPda,
-          systemProgram: SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
+          quoteTokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -302,8 +380,10 @@ describe("duel", () => {
       expect(Number(accountAfter.amount)).to.be.lessThan(tokensHeld);
       console.log("  tokens remaining:", Number(accountAfter.amount));
 
-      const balAfter = await provider.connection.getBalance(creator.publicKey);
-      console.log("  SOL gained:", balAfter - balBefore);
+      const wsolAfter = await getAccount(provider.connection, creatorWsolAta);
+      const wsolGained = Number(wsolAfter.amount) - wsolBalBefore;
+      console.log("  WSOL gained:", wsolGained);
+      expect(wsolGained).to.be.greaterThan(0);
     });
   });
 
@@ -315,16 +395,19 @@ describe("duel", () => {
       const createAtaIx = createAssociatedTokenAccountInstruction(
         creator.publicKey, buyerTokenAccountB, creator.publicKey, mintB
       );
-      const tx = new anchor.web3.Transaction().add(createAtaIx);
+      const tx = new Transaction().add(createAtaIx);
       await provider.sendAndConfirm(tx);
     });
 
     it("should buy tokens on Side B with less SOL", async () => {
-      const solAmount = new BN(LAMPORTS_PER_SOL / 2); // 0.5 SOL
-      const minTokensOut = new BN(1);
+      const solAmount = LAMPORTS_PER_SOL / 2; // 0.5 SOL
 
+      // Wrap SOL to WSOL
+      await wrapSol(provider, creator.publicKey, solAmount);
+
+      const minTokensOut = new BN(1);
       const tx = await program.methods
-        .buyTokens(1, solAmount, minTokensOut)
+        .buyTokens(1, new BN(solAmount), minTokensOut)
         .accounts({
           buyer: creator.publicKey,
           market: marketPda,
@@ -332,10 +415,12 @@ describe("duel", () => {
           tokenMint: mintB,
           tokenVault: tokenVaultB,
           buyerTokenAccount: buyerTokenAccountB,
-          solVault: solVaultB,
+          quoteMint: NATIVE_MINT,
+          quoteVault: quoteVaultB,
+          buyerQuoteAccount: creatorWsolAta,
           config: configPda,
-          systemProgram: SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
+          quoteTokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -374,11 +459,12 @@ describe("duel", () => {
             market: marketPda,
             sideA: sideAPda,
             sideB: sideBPda,
-            solVaultA: solVaultA,
-            solVaultB: solVaultB,
-            protocolFeeAccount: protocolFeeAccount.publicKey,
-            creatorFeeAccount: creator.publicKey,
-            systemProgram: SystemProgram.programId,
+            quoteMint: NATIVE_MINT,
+            quoteVaultA: quoteVaultA,
+            quoteVaultB: quoteVaultB,
+            protocolFeeAccount: protocolFeeAccount,
+            creatorFeeAccount: creatorFeeAccount,
+            quoteTokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have thrown");
@@ -402,10 +488,12 @@ describe("duel", () => {
             tokenMint: mintA,
             tokenVault: tokenVaultA,
             sellerTokenAccount: buyerTokenAccountA,
-            solVault: solVaultA,
+            quoteMint: NATIVE_MINT,
+            quoteVault: quoteVaultA,
+            sellerQuoteAccount: creatorWsolAta,
             config: configPda,
-            systemProgram: SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
+            quoteTokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have thrown");
@@ -422,7 +510,7 @@ describe("duel", () => {
     let sA: PublicKey, sB: PublicKey;
     let mA: PublicKey, mB: PublicKey;
     let tvA: PublicKey, tvB: PublicKey;
-    let svA: PublicKey, svB: PublicKey;
+    let qvA: PublicKey, qvB: PublicKey;
     let btA: PublicKey, btB: PublicKey;
 
     before(async () => {
@@ -436,11 +524,8 @@ describe("duel", () => {
       [mB] = PublicKey.findProgramAddressSync([Buffer.from("mint"), m.toBuffer(), Buffer.from([1])], program.programId);
       [tvA] = PublicKey.findProgramAddressSync([Buffer.from("token_vault"), m.toBuffer(), Buffer.from([0])], program.programId);
       [tvB] = PublicKey.findProgramAddressSync([Buffer.from("token_vault"), m.toBuffer(), Buffer.from([1])], program.programId);
-      [svA] = PublicKey.findProgramAddressSync([Buffer.from("sol_vault"), m.toBuffer(), Buffer.from([0])], program.programId);
-      [svB] = PublicKey.findProgramAddressSync([Buffer.from("sol_vault"), m.toBuffer(), Buffer.from([1])], program.programId);
-
-      // Pre-fund protocol fee account
-      await prefundPda(protocolFeeAccount.publicKey);
+      [qvA] = PublicKey.findProgramAddressSync([Buffer.from("quote_vault"), m.toBuffer(), Buffer.from([0])], program.programId);
+      [qvB] = PublicKey.findProgramAddressSync([Buffer.from("quote_vault"), m.toBuffer(), Buffer.from([1])], program.programId);
     });
 
     it("should create a market with a very short deadline", async () => {
@@ -471,14 +556,20 @@ describe("duel", () => {
           new BN(0),  // maxObservationChangePerUpdate
           0,          // minTwapSpreadBps
           0,          // creatorFeeBps
+          { twap: {} }, // resolutionMode
+          PublicKey.default, // oracleAuthority
+          new BN(0),  // oracleDisputeWindow
         )
         .accounts({
           creator: creator.publicKey,
           market: m, sideA: sA, sideB: sB,
           tokenMintA: mA, tokenMintB: mB,
           tokenVaultA: tvA, tokenVaultB: tvB,
-          solVaultA: svA, solVaultB: svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          quoteMint: NATIVE_MINT,
+          quoteTokenProgram: TOKEN_PROGRAM_ID,
+          quoteVaultA: qvA, quoteVaultB: qvB,
+          protocolFeeAccount: protocolFeeAccount,
+          creatorFeeAccount: creatorFeeAccount,
           config: configPda,
           metadataA: findMetadataPda(mA),
           metadataB: findMetadataPda(mB),
@@ -499,28 +590,34 @@ describe("duel", () => {
 
       const createAtaA = createAssociatedTokenAccountInstruction(creator.publicKey, btA, creator.publicKey, mA);
       const createAtaB = createAssociatedTokenAccountInstruction(creator.publicKey, btB, creator.publicKey, mB);
-      const tx = new anchor.web3.Transaction().add(createAtaA).add(createAtaB);
+      const tx = new Transaction().add(createAtaA).add(createAtaB);
       await provider.sendAndConfirm(tx);
 
       // Side A: 2 SOL (winner)
+      await wrapSol(provider, creator.publicKey, 2 * LAMPORTS_PER_SOL);
+
       await program.methods
         .buyTokens(0, new BN(2 * LAMPORTS_PER_SOL), new BN(1))
         .accounts({
           buyer: creator.publicKey, market: m, sideAccount: sA,
-          tokenMint: mA, tokenVault: tvA, buyerTokenAccount: btA, solVault: svA,
+          tokenMint: mA, tokenVault: tvA, buyerTokenAccount: btA,
+          quoteMint: NATIVE_MINT, quoteVault: qvA, buyerQuoteAccount: creatorWsolAta,
           config: configPda,
-          systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+          tokenProgram: TOKEN_PROGRAM_ID, quoteTokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
       // Side B: 0.5 SOL
+      await wrapSol(provider, creator.publicKey, LAMPORTS_PER_SOL / 2);
+
       await program.methods
         .buyTokens(1, new BN(LAMPORTS_PER_SOL / 2), new BN(1))
         .accounts({
           buyer: creator.publicKey, market: m, sideAccount: sB,
-          tokenMint: mB, tokenVault: tvB, buyerTokenAccount: btB, solVault: svB,
+          tokenMint: mB, tokenVault: tvB, buyerTokenAccount: btB,
+          quoteMint: NATIVE_MINT, quoteVault: qvB, buyerQuoteAccount: creatorWsolAta,
           config: configPda,
-          systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+          tokenProgram: TOKEN_PROGRAM_ID, quoteTokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -550,10 +647,11 @@ describe("duel", () => {
         .resolveMarket()
         .accounts({
           resolver: creator.publicKey, market: m, sideA: sA, sideB: sB,
-          solVaultA: svA, solVaultB: svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
-          creatorFeeAccount: creator.publicKey,
-          systemProgram: SystemProgram.programId,
+          quoteMint: NATIVE_MINT,
+          quoteVaultA: qvA, quoteVaultB: qvB,
+          protocolFeeAccount: protocolFeeAccount,
+          creatorFeeAccount: creatorFeeAccount,
+          quoteTokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -570,22 +668,24 @@ describe("duel", () => {
       const tokenAmount = new BN(Number(accountBefore.amount));
       console.log("  selling", Number(accountBefore.amount), "tokens");
 
-      const sellerBalBefore = await provider.connection.getBalance(creator.publicKey);
+      const wsolBefore = await getAccount(provider.connection, creatorWsolAta);
+      const wsolBalBefore = Number(wsolBefore.amount);
 
       await program.methods
         .sellPostResolution(0, tokenAmount, new BN(1))
         .accounts({
           seller: creator.publicKey, market: m, sideAccount: sA,
-          tokenMint: mA, tokenVault: tvA, sellerTokenAccount: btA, solVault: svA,
+          tokenMint: mA, tokenVault: tvA, sellerTokenAccount: btA,
+          quoteMint: NATIVE_MINT, quoteVault: qvA, sellerQuoteAccount: creatorWsolAta,
           config: configPda,
-          systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+          tokenProgram: TOKEN_PROGRAM_ID, quoteTokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
-      const sellerBalAfter = await provider.connection.getBalance(creator.publicKey);
-      const gained = sellerBalAfter - sellerBalBefore;
-      console.log("  SOL gained from selling:", gained);
-      expect(gained).to.be.greaterThan(0);
+      const wsolAfter = await getAccount(provider.connection, creatorWsolAta);
+      const wsolGained = Number(wsolAfter.amount) - wsolBalBefore;
+      console.log("  WSOL gained from selling:", wsolGained);
+      expect(wsolGained).to.be.greaterThan(0);
 
       const accountAfter = await getAccount(provider.connection, btA);
       expect(Number(accountAfter.amount)).to.equal(0);

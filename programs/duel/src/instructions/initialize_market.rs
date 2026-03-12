@@ -153,6 +153,10 @@ pub struct InitializeMarket<'info> {
     )]
     pub token_metadata_program: UncheckedAccount<'info>,
 
+    /// Creator fee recipient (must be a quote token account)
+    /// CHECK: Stored on market, validated at resolution time
+    pub creator_fee_account: UncheckedAccount<'info>,
+
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
     pub rent: Sysvar<'info, Rent>,
@@ -266,7 +270,7 @@ pub fn handler(
     market.max_observation_change_per_update = max_observation_change_per_update;
     market.min_twap_spread_bps = min_twap_spread_bps;
     market.creator_fee_bps = creator_fee_bps;
-    market.creator_fee_account = ctx.accounts.creator.key();
+    market.creator_fee_account = ctx.accounts.creator_fee_account.key();
     market.status = MarketStatus::Active;
     market.twap_samples_count = 0;
     market.last_sample_ts = 0;
