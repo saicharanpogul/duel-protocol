@@ -7,25 +7,24 @@ import {
   SystemProgram,
   LAMPORTS_PER_SOL,
   ComputeBudgetProgram,
+  Transaction,
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
+  NATIVE_MINT,
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
   getAccount,
 } from "@solana/spl-token";
 import { expect } from "chai";
 import BN from "bn.js";
-
-const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
-
-function findMetadataPda(mint: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("metadata"), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
-    TOKEN_METADATA_PROGRAM_ID
-  );
-  return pda;
-}
+import {
+  TOKEN_METADATA_PROGRAM_ID,
+  findMetadataPda,
+  derivePdas,
+  wrapSol,
+  Pdas,
+} from "./helpers";
 
 describe("duel - edge cases & security", () => {
   const provider = anchor.AnchorProvider.env();
@@ -36,46 +35,66 @@ describe("duel - edge cases & security", () => {
 
   const curveParams = { a: new BN(1_000_000), n: 1, b: new BN(1_000) };
   const totalSupply = new BN(1_000_000_000);
-  const edgeBase = Math.floor(Math.random() * 10_000_000) + 40_000_000; // random offset for persistent validator
-  const protocolFeeAccount = Keypair.generate();
-  let configPda: PublicKey;
+  const edgeBase = Math.floor(Math.random() * 10_000_000) + 40_000_000;
+
+  const [configPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("config")],
+    program.programId
+  );
+
+  let protocolFeeOwner: Keypair;
+  let protocolFeeAccount: PublicKey;
+  let creatorFeeAccount: PublicKey;
+  let creatorWsolAta: PublicKey;
 
   before(async () => {
-    [configPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("config")],
-      program.programId
+    protocolFeeOwner = Keypair.generate();
+    const fundTx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: creator.publicKey,
+        toPubkey: protocolFeeOwner.publicKey,
+        lamports: LAMPORTS_PER_SOL / 10,
+      })
     );
+    await provider.sendAndConfirm(fundTx);
 
-    // Initialize ProgramConfig if not yet created
+    protocolFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, protocolFeeOwner.publicKey);
+    const createAtaTx = new Transaction().add(
+      createAssociatedTokenAccountInstruction(
+        protocolFeeOwner.publicKey, protocolFeeAccount, protocolFeeOwner.publicKey, NATIVE_MINT
+      )
+    );
+    await provider.sendAndConfirm(createAtaTx, [protocolFeeOwner]);
+
+    creatorFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, creator.publicKey);
+    try {
+      await getAccount(provider.connection, creatorFeeAccount);
+    } catch {
+      const tx = new Transaction().add(
+        createAssociatedTokenAccountInstruction(creator.publicKey, creatorFeeAccount, creator.publicKey, NATIVE_MINT)
+      );
+      await provider.sendAndConfirm(tx);
+    }
+    creatorWsolAta = creatorFeeAccount;
+
     try {
       await program.account.programConfig.fetch(configPda);
     } catch {
-      await prefundPda(protocolFeeAccount.publicKey);
       await program.methods
         .initializeConfig(125, new BN(0))
         .accounts({
           admin: creator.publicKey,
-          config: configPda,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount,
           systemProgram: SystemProgram.programId,
-        })
+        } as any)
         .rpc();
     }
   });
 
-  // Helper: pre-fund a PDA so it's rent-exempt
-  async function prefundPda(pda: PublicKey) {
-    const tx = new anchor.web3.Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: creator.publicKey,
-        toPubkey: pda,
-        lamports: 890_880,
-      })
-    );
-    await provider.sendAndConfirm(tx);
+  function deriveMarketPdas(marketId: BN) {
+    return derivePdas(program.programId, creator.publicKey, marketId);
   }
 
-  // Helper: create a market with specific params
   async function createMarket(
     marketId: BN,
     overrides?: {
@@ -100,20 +119,7 @@ describe("duel - edge cases & security", () => {
       ...overrides,
     };
 
-    const [market] = PublicKey.findProgramAddressSync(
-      [Buffer.from("market"), creator.publicKey.toBuffer(), marketId.toArrayLike(Buffer, "le", 8)],
-      program.programId
-    );
-    const [sideA] = PublicKey.findProgramAddressSync([Buffer.from("side"), market.toBuffer(), Buffer.from([0])], program.programId);
-    const [sideB] = PublicKey.findProgramAddressSync([Buffer.from("side"), market.toBuffer(), Buffer.from([1])], program.programId);
-    const [mintA] = PublicKey.findProgramAddressSync([Buffer.from("mint"), market.toBuffer(), Buffer.from([0])], program.programId);
-    const [mintB] = PublicKey.findProgramAddressSync([Buffer.from("mint"), market.toBuffer(), Buffer.from([1])], program.programId);
-    const [tvA] = PublicKey.findProgramAddressSync([Buffer.from("token_vault"), market.toBuffer(), Buffer.from([0])], program.programId);
-    const [tvB] = PublicKey.findProgramAddressSync([Buffer.from("token_vault"), market.toBuffer(), Buffer.from([1])], program.programId);
-    const [svA] = PublicKey.findProgramAddressSync([Buffer.from("sol_vault"), market.toBuffer(), Buffer.from([0])], program.programId);
-    const [svB] = PublicKey.findProgramAddressSync([Buffer.from("sol_vault"), market.toBuffer(), Buffer.from([1])], program.programId);
-
-    await prefundPda(protocolFeeAccount.publicKey);
+    const pdas = deriveMarketPdas(marketId);
 
     await program.methods
       .initializeMarket(
@@ -127,27 +133,25 @@ describe("duel - edge cases & security", () => {
         new BN(opts.protectionActivationOffset),
         curveParams,
         totalSupply,
-        "Edge A",
-        "EA",
-        "",
-        "Edge B",
-        "EB",
-        "",
+        "Edge A", "EA", "",
+        "Edge B", "EB", "",
         { unlocked: {} },
-        new BN(0),  // maxObservationChangePerUpdate
-        0,          // minTwapSpreadBps
-        0,          // creatorFeeBps
+        new BN(0), 0, 0,
+        { twap: {} }, PublicKey.default, new BN(0),
       )
       .accounts({
         creator: creator.publicKey,
-        market, sideA, sideB,
-        tokenMintA: mintA, tokenMintB: mintB,
-        tokenVaultA: tvA, tokenVaultB: tvB,
-        solVaultA: svA, solVaultB: svB,
-        protocolFeeAccount: protocolFeeAccount.publicKey,
+        market: pdas.market, sideA: pdas.sideA, sideB: pdas.sideB,
+        tokenMintA: pdas.mintA, tokenMintB: pdas.mintB,
+        tokenVaultA: pdas.tvA, tokenVaultB: pdas.tvB,
+        quoteMint: NATIVE_MINT,
+        quoteTokenProgram: TOKEN_PROGRAM_ID,
+        quoteVaultA: pdas.qvA, quoteVaultB: pdas.qvB,
+        protocolFeeAccount: protocolFeeAccount,
+        creatorFeeAccount: creatorFeeAccount,
         config: configPda,
-        metadataA: findMetadataPda(mintA),
-        metadataB: findMetadataPda(mintB),
+        metadataA: findMetadataPda(pdas.mintA),
+        metadataB: findMetadataPda(pdas.mintB),
         tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
@@ -156,45 +160,59 @@ describe("duel - edge cases & security", () => {
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
       .rpc();
 
-    return { market, sideA, sideB, mintA, mintB, tvA, tvB, svA, svB };
+    return pdas;
   }
 
-  // Helper: buy tokens
-  async function buyTokens(
-    market: PublicKey,
-    sideAccount: PublicKey,
-    tokenVault: PublicKey,
-    solVault: PublicKey,
-    mint: PublicKey,
-    side: number,
-    solAmount: BN
-  ) {
+  async function buyTokens(pdas: Pdas, side: number, solAmount: BN) {
+    const mint = side === 0 ? pdas.mintA : pdas.mintB;
     const ata = await getAssociatedTokenAddress(mint, creator.publicKey);
     try {
       await getAccount(provider.connection, ata);
     } catch {
-      const createAtaIx = createAssociatedTokenAccountInstruction(
-        creator.publicKey, ata, creator.publicKey, mint
-      );
-      await provider.sendAndConfirm(new anchor.web3.Transaction().add(createAtaIx));
+      const ix = createAssociatedTokenAccountInstruction(creator.publicKey, ata, creator.publicKey, mint);
+      await provider.sendAndConfirm(new Transaction().add(ix));
     }
+
+    await wrapSol(provider, creator.publicKey, solAmount.toNumber());
 
     await program.methods
       .buyTokens(side, solAmount, new BN(1))
       .accounts({
-        buyer: creator.publicKey, market, sideAccount,
-        tokenMint: mint, tokenVault, buyerTokenAccount: ata, solVault,
-        config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+        buyer: creator.publicKey, market: pdas.market,
+        sideAccount: side === 0 ? pdas.sideA : pdas.sideB,
+        tokenMint: mint,
+        tokenVault: side === 0 ? pdas.tvA : pdas.tvB,
+        buyerTokenAccount: ata,
+        quoteMint: NATIVE_MINT,
+        quoteVault: side === 0 ? pdas.qvA : pdas.qvB,
+        buyerQuoteAccount: creatorWsolAta,
+        config: configPda,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        quoteTokenProgram: TOKEN_PROGRAM_ID,
       })
       .rpc();
 
     return ata;
   }
 
+  async function resolveMarket(pdas: Pdas) {
+    await program.methods.resolveMarket()
+      .accounts({
+        resolver: creator.publicKey, market: pdas.market,
+        sideA: pdas.sideA, sideB: pdas.sideB,
+        quoteMint: NATIVE_MINT,
+        quoteVaultA: pdas.qvA, quoteVaultB: pdas.qvB,
+        protocolFeeAccount: protocolFeeAccount,
+        creatorFeeAccount: creatorFeeAccount,
+        quoteTokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+  }
+
   // ---- EDGE CASE TESTS ----
 
   describe("invalid side index", () => {
-    let m: Awaited<ReturnType<typeof createMarket>>;
+    let m: Pdas;
 
     before(async () => {
       m = await createMarket(new BN(edgeBase + 0));
@@ -202,20 +220,21 @@ describe("duel - edge cases & security", () => {
 
     it("should reject buy with side = 2", async () => {
       const ata = await getAssociatedTokenAddress(m.mintA, creator.publicKey);
-      try {
-        await getAccount(provider.connection, ata);
-      } catch {
+      try { await getAccount(provider.connection, ata); } catch {
         const ix = createAssociatedTokenAccountInstruction(creator.publicKey, ata, creator.publicKey, m.mintA);
-        await provider.sendAndConfirm(new anchor.web3.Transaction().add(ix));
+        await provider.sendAndConfirm(new Transaction().add(ix));
       }
+
+      await wrapSol(provider, creator.publicKey, LAMPORTS_PER_SOL);
 
       try {
         await program.methods
           .buyTokens(2, new BN(LAMPORTS_PER_SOL), new BN(1))
           .accounts({
             buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
-            tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
-            config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+            tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata,
+            quoteMint: NATIVE_MINT, quoteVault: m.qvA, buyerQuoteAccount: creatorWsolAta,
+            config: configPda, tokenProgram: TOKEN_PROGRAM_ID, quoteTokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have thrown");
@@ -226,7 +245,7 @@ describe("duel - edge cases & security", () => {
   });
 
   describe("zero amount operations", () => {
-    let m: Awaited<ReturnType<typeof createMarket>>;
+    let m: Pdas;
 
     before(async () => {
       m = await createMarket(new BN(edgeBase + 1));
@@ -236,7 +255,7 @@ describe("duel - edge cases & security", () => {
       const ata = await getAssociatedTokenAddress(m.mintA, creator.publicKey);
       try { await getAccount(provider.connection, ata); } catch {
         const ix = createAssociatedTokenAccountInstruction(creator.publicKey, ata, creator.publicKey, m.mintA);
-        await provider.sendAndConfirm(new anchor.web3.Transaction().add(ix));
+        await provider.sendAndConfirm(new Transaction().add(ix));
       }
 
       try {
@@ -244,8 +263,9 @@ describe("duel - edge cases & security", () => {
           .buyTokens(0, new BN(0), new BN(0))
           .accounts({
             buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
-            tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
-            config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+            tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata,
+            quoteMint: NATIVE_MINT, quoteVault: m.qvA, buyerQuoteAccount: creatorWsolAta,
+            config: configPda, tokenProgram: TOKEN_PROGRAM_ID, quoteTokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have thrown");
@@ -262,8 +282,9 @@ describe("duel - edge cases & security", () => {
           .sellTokens(0, new BN(0), new BN(0))
           .accounts({
             seller: creator.publicKey, market: m.market, sideAccount: m.sideA,
-            tokenMint: m.mintA, tokenVault: m.tvA, sellerTokenAccount: ata, solVault: m.svA,
-            config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+            tokenMint: m.mintA, tokenVault: m.tvA, sellerTokenAccount: ata,
+            quoteMint: NATIVE_MINT, quoteVault: m.qvA, sellerQuoteAccount: creatorWsolAta,
+            config: configPda, tokenProgram: TOKEN_PROGRAM_ID, quoteTokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have thrown");
@@ -274,7 +295,7 @@ describe("duel - edge cases & security", () => {
   });
 
   describe("double resolve attack", () => {
-    let m: Awaited<ReturnType<typeof createMarket>>;
+    let m: Pdas;
 
     before(async () => {
       const now = Math.floor(Date.now() / 1000);
@@ -286,40 +307,21 @@ describe("duel - edge cases & security", () => {
         protectionActivationOffset: 0,
       });
 
-      // Buy on both sides
-      await buyTokens(m.market, m.sideA, m.tvA, m.svA, m.mintA, 0, new BN(2 * LAMPORTS_PER_SOL));
-      await buyTokens(m.market, m.sideB, m.tvB, m.svB, m.mintB, 1, new BN(LAMPORTS_PER_SOL));
+      await buyTokens(m, 0, new BN(2 * LAMPORTS_PER_SOL));
+      await buyTokens(m, 1, new BN(LAMPORTS_PER_SOL));
 
-      // Wait for TWAP window and record sample
       await new Promise((r) => setTimeout(r, 5000));
       await program.methods.recordTwapSample()
         .accounts({ cranker: creator.publicKey, market: m.market, sideA: m.sideA, sideB: m.sideB })
         .rpc();
 
-      // Wait for deadline
       await new Promise((r) => setTimeout(r, 10000));
-
-      // First resolve
-      await program.methods.resolveMarket()
-        .accounts({
-          resolver: creator.publicKey, market: m.market, sideA: m.sideA, sideB: m.sideB,
-          solVaultA: m.svA, solVaultB: m.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
+      await resolveMarket(m);
     });
 
     it("should reject second resolve", async () => {
       try {
-        await program.methods.resolveMarket()
-          .accounts({
-            resolver: creator.publicKey, market: m.market, sideA: m.sideA, sideB: m.sideB,
-            solVaultA: m.svA, solVaultB: m.svB,
-            protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
-            systemProgram: SystemProgram.programId,
-          })
-          .rpc();
+        await resolveMarket(m);
         expect.fail("should have thrown");
       } catch (err: any) {
         expect(err.error.errorCode.code).to.equal("MarketAlreadyResolved");
@@ -328,18 +330,19 @@ describe("duel - edge cases & security", () => {
 
     it("should reject buy after resolution", async () => {
       const ata = await getAssociatedTokenAddress(m.mintA, creator.publicKey);
+      await wrapSol(provider, creator.publicKey, LAMPORTS_PER_SOL);
       try {
         await program.methods
           .buyTokens(0, new BN(LAMPORTS_PER_SOL), new BN(1))
           .accounts({
             buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
-            tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
-            config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+            tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata,
+            quoteMint: NATIVE_MINT, quoteVault: m.qvA, buyerQuoteAccount: creatorWsolAta,
+            config: configPda, tokenProgram: TOKEN_PROGRAM_ID, quoteTokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have thrown");
       } catch (err: any) {
-        // MarketExpired or MarketAlreadyResolved
         expect(["MarketExpired", "MarketAlreadyResolved"]).to.include(err.error.errorCode.code);
       }
     });
@@ -351,25 +354,25 @@ describe("duel - edge cases & security", () => {
           .sellTokens(0, new BN(1), new BN(0))
           .accounts({
             seller: creator.publicKey, market: m.market, sideAccount: m.sideA,
-            tokenMint: m.mintA, tokenVault: m.tvA, sellerTokenAccount: ata, solVault: m.svA,
-            config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+            tokenMint: m.mintA, tokenVault: m.tvA, sellerTokenAccount: ata,
+            quoteMint: NATIVE_MINT, quoteVault: m.qvA, sellerQuoteAccount: creatorWsolAta,
+            config: configPda, tokenProgram: TOKEN_PROGRAM_ID, quoteTokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have thrown");
       } catch (err: any) {
-        // Deadline has passed, so MarketExpired or MarketAlreadyResolved both valid
         expect(["MarketExpired", "MarketAlreadyResolved"]).to.include(err.error.errorCode.code);
       }
     });
   });
 
   describe("sell all tokens", () => {
-    let m: Awaited<ReturnType<typeof createMarket>>;
+    let m: Pdas;
     let ataA: PublicKey;
 
     before(async () => {
       m = await createMarket(new BN(edgeBase + 3));
-      ataA = await buyTokens(m.market, m.sideA, m.tvA, m.svA, m.mintA, 0, new BN(LAMPORTS_PER_SOL));
+      ataA = await buyTokens(m, 0, new BN(LAMPORTS_PER_SOL));
     });
 
     it("should sell all tokens and leave zero balance", async () => {
@@ -380,8 +383,9 @@ describe("duel - edge cases & security", () => {
         .sellTokens(0, allTokens, new BN(1))
         .accounts({
           seller: creator.publicKey, market: m.market, sideAccount: m.sideA,
-          tokenMint: m.mintA, tokenVault: m.tvA, sellerTokenAccount: ataA, solVault: m.svA,
-          config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+          tokenMint: m.mintA, tokenVault: m.tvA, sellerTokenAccount: ataA,
+          quoteMint: NATIVE_MINT, quoteVault: m.qvA, sellerQuoteAccount: creatorWsolAta,
+          config: configPda, tokenProgram: TOKEN_PROGRAM_ID, quoteTokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -393,12 +397,14 @@ describe("duel - edge cases & security", () => {
     });
 
     it("should still allow buying after all tokens sold", async () => {
+      await wrapSol(provider, creator.publicKey, LAMPORTS_PER_SOL / 2);
       await program.methods
         .buyTokens(0, new BN(LAMPORTS_PER_SOL / 2), new BN(1))
         .accounts({
           buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
-          tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ataA, solVault: m.svA,
-          config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+          tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ataA,
+          quoteMint: NATIVE_MINT, quoteVault: m.qvA, buyerQuoteAccount: creatorWsolAta,
+          config: configPda, tokenProgram: TOKEN_PROGRAM_ID, quoteTokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -408,7 +414,7 @@ describe("duel - edge cases & security", () => {
   });
 
   describe("slippage protection", () => {
-    let m: Awaited<ReturnType<typeof createMarket>>;
+    let m: Pdas;
 
     before(async () => {
       m = await createMarket(new BN(edgeBase + 4));
@@ -418,17 +424,19 @@ describe("duel - edge cases & security", () => {
       const ata = await getAssociatedTokenAddress(m.mintA, creator.publicKey);
       try { await getAccount(provider.connection, ata); } catch {
         const ix = createAssociatedTokenAccountInstruction(creator.publicKey, ata, creator.publicKey, m.mintA);
-        await provider.sendAndConfirm(new anchor.web3.Transaction().add(ix));
+        await provider.sendAndConfirm(new Transaction().add(ix));
       }
 
+      await wrapSol(provider, creator.publicKey, 1000);
+
       try {
-        // Request impossibly high minimum tokens
         await program.methods
           .buyTokens(0, new BN(1000), new BN(999_999_999))
           .accounts({
             buyer: creator.publicKey, market: m.market, sideAccount: m.sideA,
-            tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata, solVault: m.svA,
-            config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+            tokenMint: m.mintA, tokenVault: m.tvA, buyerTokenAccount: ata,
+            quoteMint: NATIVE_MINT, quoteVault: m.qvA, buyerQuoteAccount: creatorWsolAta,
+            config: configPda, tokenProgram: TOKEN_PROGRAM_ID, quoteTokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have thrown");
@@ -444,7 +452,6 @@ describe("duel - edge cases & security", () => {
         await createMarket(new BN(edgeBase + 100), { battleTaxBps: 10001 });
         expect.fail("should have thrown");
       } catch (err: any) {
-        // Error may be AnchorError or SendTransactionError
         const code = err?.error?.errorCode?.code || err?.message || "";
         expect(code).to.satisfy((c: string) =>
           c === "InvalidMarketConfig" || c.includes("InvalidMarketConfig") || c.includes("custom program error")
@@ -490,7 +497,7 @@ describe("duel - edge cases & security", () => {
   });
 
   describe("TWAP sample interval enforcement", () => {
-    let m: Awaited<ReturnType<typeof createMarket>>;
+    let m: Pdas;
 
     before(async () => {
       const now = Math.floor(Date.now() / 1000);
@@ -501,13 +508,10 @@ describe("duel - edge cases & security", () => {
         sellPenaltyMaxBps: 0,
         protectionActivationOffset: 0,
       });
-      await buyTokens(m.market, m.sideA, m.tvA, m.svA, m.mintA, 0, new BN(LAMPORTS_PER_SOL));
-      await buyTokens(m.market, m.sideB, m.tvB, m.svB, m.mintB, 1, new BN(LAMPORTS_PER_SOL / 2));
+      await buyTokens(m, 0, new BN(LAMPORTS_PER_SOL));
+      await buyTokens(m, 1, new BN(LAMPORTS_PER_SOL / 2));
 
-      // Wait for TWAP window
       await new Promise((r) => setTimeout(r, 6000));
-
-      // Record first sample
       await program.methods.recordTwapSample()
         .accounts({ cranker: creator.publicKey, market: m.market, sideA: m.sideA, sideB: m.sideB })
         .rpc();
@@ -526,7 +530,7 @@ describe("duel - edge cases & security", () => {
   });
 
   describe("sell post-resolution on losing side", () => {
-    let m: Awaited<ReturnType<typeof createMarket>>;
+    let m: Pdas;
     let atB: PublicKey;
 
     before(async () => {
@@ -540,45 +544,38 @@ describe("duel - edge cases & security", () => {
         battleTaxBps: 5000,
       });
 
-      // Side A wins (more SOL)
-      await buyTokens(m.market, m.sideA, m.tvA, m.svA, m.mintA, 0, new BN(2 * LAMPORTS_PER_SOL));
-      atB = await buyTokens(m.market, m.sideB, m.tvB, m.svB, m.mintB, 1, new BN(LAMPORTS_PER_SOL));
+      await buyTokens(m, 0, new BN(2 * LAMPORTS_PER_SOL));
+      atB = await buyTokens(m, 1, new BN(LAMPORTS_PER_SOL));
 
-      // TWAP & resolve
       await new Promise((r) => setTimeout(r, 5000));
       await program.methods.recordTwapSample()
         .accounts({ cranker: creator.publicKey, market: m.market, sideA: m.sideA, sideB: m.sideB })
         .rpc();
       await new Promise((r) => setTimeout(r, 10000));
-      await program.methods.resolveMarket()
-        .accounts({
-          resolver: creator.publicKey, market: m.market, sideA: m.sideA, sideB: m.sideB,
-          solVaultA: m.svA, solVaultB: m.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
+      await resolveMarket(m);
     });
 
     it("should allow losing side to sell post-resolution (partial, at reduced value)", async () => {
       const accountBefore = await getAccount(provider.connection, atB);
       const totalTokens = Number(accountBefore.amount);
-      // Sell only 10% of holdings to account for depleted vault
       const tokenAmount = new BN(Math.floor(totalTokens / 10));
-      const balBefore = await provider.connection.getBalance(creator.publicKey);
+
+      const wsolBefore = await getAccount(provider.connection, creatorWsolAta);
+      const wsolBalBefore = Number(wsolBefore.amount);
 
       await program.methods
         .sellPostResolution(1, tokenAmount, new BN(0))
         .accounts({
           seller: creator.publicKey, market: m.market, sideAccount: m.sideB,
-          tokenMint: m.mintB, tokenVault: m.tvB, sellerTokenAccount: atB, solVault: m.svB,
-          config: configPda, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID,
+          tokenMint: m.mintB, tokenVault: m.tvB, sellerTokenAccount: atB,
+          quoteMint: NATIVE_MINT, quoteVault: m.qvB, sellerQuoteAccount: creatorWsolAta,
+          config: configPda, tokenProgram: TOKEN_PROGRAM_ID, quoteTokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
-      const balAfter = await provider.connection.getBalance(creator.publicKey);
-      const gained = balAfter - balBefore;
-      console.log("  losing side SOL recovered (partial):", gained);
+      const wsolAfter = await getAccount(provider.connection, creatorWsolAta);
+      const gained = Number(wsolAfter.amount) - wsolBalBefore;
+      console.log("  losing side WSOL recovered (partial):", gained);
       expect(gained).to.be.greaterThan(0);
     });
   });

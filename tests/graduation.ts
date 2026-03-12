@@ -14,58 +14,86 @@ import {
   SystemProgram,
   LAMPORTS_PER_SOL,
   ComputeBudgetProgram,
+  Transaction,
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
+  NATIVE_MINT,
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
   createSyncNativeInstruction,
   getAccount,
 } from "@solana/spl-token";
 import { expect } from "chai";
+import {
+  TOKEN_METADATA_PROGRAM_ID,
+  findMetadataPda,
+  derivePdas,
+  wrapSol,
+  Pdas,
+} from "./helpers";
 
-const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
-const WSOL_MINT = new PublicKey("So11111111111111111111111111111111111111112");
+const WSOL_MINT = NATIVE_MINT;
 const DAMM_V2_PROGRAM_ID = new PublicKey("cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG");
 const POOL_AUTHORITY = new PublicKey("HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC");
 const TOKEN_2022_PROGRAM_ID = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
-
-function findMetadataPda(mint: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("metadata"), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
-    TOKEN_METADATA_PROGRAM_ID
-  );
-  return pda;
-}
 
 describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
   const program = anchor.workspace.Duel as Program<Duel>;
   const creator = provider.wallet;
-  const protocolFeeAccount = Keypair.generate();
+
   const [configPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("config")],
     program.programId
   );
 
+  let protocolFeeOwner: Keypair;
+  let protocolFeeAccount: PublicKey;
+  let creatorFeeAccount: PublicKey;
+  let creatorWsolAta: PublicKey;
+
   before(async () => {
+    protocolFeeOwner = Keypair.generate();
+    const fundTx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: creator.publicKey,
+        toPubkey: protocolFeeOwner.publicKey,
+        lamports: LAMPORTS_PER_SOL / 10,
+      })
+    );
+    await provider.sendAndConfirm(fundTx);
+
+    protocolFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, protocolFeeOwner.publicKey);
+    const createAtaTx = new Transaction().add(
+      createAssociatedTokenAccountInstruction(
+        protocolFeeOwner.publicKey, protocolFeeAccount, protocolFeeOwner.publicKey, NATIVE_MINT
+      )
+    );
+    await provider.sendAndConfirm(createAtaTx, [protocolFeeOwner]);
+
+    creatorFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, creator.publicKey);
+    try {
+      await getAccount(provider.connection, creatorFeeAccount);
+    } catch {
+      const tx = new Transaction().add(
+        createAssociatedTokenAccountInstruction(creator.publicKey, creatorFeeAccount, creator.publicKey, NATIVE_MINT)
+      );
+      await provider.sendAndConfirm(tx);
+    }
+    creatorWsolAta = creatorFeeAccount;
+
     try {
       await program.account.programConfig.fetch(configPda);
     } catch {
-      // Pre-fund fee account and init config
-      const tx = new anchor.web3.Transaction().add(
-        SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: protocolFeeAccount.publicKey, lamports: 890_880 })
-      );
-      await provider.sendAndConfirm(tx);
       await program.methods
         .initializeConfig(125, new BN(0))
         .accounts({
           admin: creator.publicKey,
-          config: configPda,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
+          protocolFeeAccount: protocolFeeAccount,
           systemProgram: SystemProgram.programId,
-        })
+        } as any)
         .rpc();
     }
   });
@@ -74,30 +102,8 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
 
   // ─── Helpers ───
 
-  function derivePdas(marketId: BN) {
-    const [market] = PublicKey.findProgramAddressSync(
-      [Buffer.from("market"), creator.publicKey.toBuffer(), marketId.toArrayLike(Buffer, "le", 8)],
-      program.programId
-    );
-    const pda = (seed: string, idx: number) =>
-      PublicKey.findProgramAddressSync(
-        [Buffer.from(seed), market.toBuffer(), Buffer.from([idx])],
-        program.programId
-      )[0];
-    return {
-      market,
-      sideA: pda("side", 0), sideB: pda("side", 1),
-      mintA: pda("mint", 0), mintB: pda("mint", 1),
-      tvA: pda("token_vault", 0), tvB: pda("token_vault", 1),
-      svA: pda("sol_vault", 0), svB: pda("sol_vault", 1),
-    };
-  }
-
-  async function prefundPda(pda: PublicKey) {
-    const tx = new anchor.web3.Transaction().add(
-      SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: pda, lamports: 890_880 })
-    );
-    await provider.sendAndConfirm(tx);
+  function deriveMarketPdas(marketId: BN) {
+    return derivePdas(program.programId, creator.publicKey, marketId);
   }
 
   function deriveDammV2Pdas(tokenAMint: PublicKey, positionNftMint: PublicKey) {
@@ -135,9 +141,7 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
 
   async function createMarketForGraduation(deadline: number) {
     const id = new BN(marketCounter++);
-    const pdas = derivePdas(id);
-
-    await prefundPda(protocolFeeAccount.publicKey);
+    const pdas = deriveMarketPdas(id);
 
     await program.methods
       .initializeMarket(
@@ -147,18 +151,20 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
         new BN(1_000_000_000),
         "Grad A", "GA", "", "Grad B", "GB", "",
         { unlocked: {} },
-        new BN(0),  // maxObservationChangePerUpdate
-        0,          // minTwapSpreadBps
-        0,          // creatorFeeBps
+        new BN(0), 0, 0,
+        { twap: {} }, PublicKey.default, new BN(0),
       )
-      .accountsStrict({
+      .accounts({
         creator: creator.publicKey,
         market: pdas.market,
         sideA: pdas.sideA, sideB: pdas.sideB,
         tokenMintA: pdas.mintA, tokenMintB: pdas.mintB,
         tokenVaultA: pdas.tvA, tokenVaultB: pdas.tvB,
-        solVaultA: pdas.svA, solVaultB: pdas.svB,
-        protocolFeeAccount: protocolFeeAccount.publicKey,
+        quoteMint: NATIVE_MINT,
+        quoteTokenProgram: TOKEN_PROGRAM_ID,
+        quoteVaultA: pdas.qvA, quoteVaultB: pdas.qvB,
+        protocolFeeAccount: protocolFeeAccount,
+        creatorFeeAccount: creatorFeeAccount,
         config: configPda,
         metadataA: findMetadataPda(pdas.mintA),
         metadataB: findMetadataPda(pdas.mintB),
@@ -173,47 +179,64 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
     return { id, pdas };
   }
 
-  async function buyForSide(pdas: ReturnType<typeof derivePdas>, side: number, solAmount: number) {
+  async function buyForSide(pdas: Pdas, side: number, solAmount: number) {
     const mint = side === 0 ? pdas.mintA : pdas.mintB;
     const sideAccount = side === 0 ? pdas.sideA : pdas.sideB;
     const tokenVault = side === 0 ? pdas.tvA : pdas.tvB;
-    const solVault = side === 0 ? pdas.svA : pdas.svB;
+    const quoteVault = side === 0 ? pdas.qvA : pdas.qvB;
 
     const ata = await getAssociatedTokenAddress(mint, creator.publicKey);
     try { await getAccount(provider.connection, ata); } catch {
       const ix = createAssociatedTokenAccountInstruction(creator.publicKey, ata, creator.publicKey, mint);
-      await provider.sendAndConfirm(new anchor.web3.Transaction().add(ix));
+      await provider.sendAndConfirm(new Transaction().add(ix));
     }
+
+    await wrapSol(provider, creator.publicKey, solAmount * LAMPORTS_PER_SOL);
 
     await program.methods
       .buyTokens(side, new BN(solAmount * LAMPORTS_PER_SOL), new BN(1))
-      .accountsStrict({
+      .accounts({
         buyer: creator.publicKey,
         market: pdas.market,
         sideAccount,
         tokenMint: mint,
         tokenVault,
         buyerTokenAccount: ata,
-        solVault,
+        quoteMint: NATIVE_MINT,
+        quoteVault,
+        buyerQuoteAccount: creatorWsolAta,
         config: configPda,
-        systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
+        quoteTokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+  }
+
+  async function resolveMarket(pdas: Pdas) {
+    await program.methods.resolveMarket()
+      .accounts({
+        resolver: creator.publicKey, market: pdas.market,
+        sideA: pdas.sideA, sideB: pdas.sideB,
+        quoteMint: NATIVE_MINT,
+        quoteVaultA: pdas.qvA, quoteVaultB: pdas.qvB,
+        protocolFeeAccount: protocolFeeAccount,
+        creatorFeeAccount: creatorFeeAccount,
+        quoteTokenProgram: TOKEN_PROGRAM_ID,
       })
       .rpc();
   }
 
   /**
-   * Graduate a side to DAMM v2. On-chain WSOL wrapping means we only need to
-   * create the payer ATAs — no client-side SOL/WSOL funding required.
+   * Graduate a side to DAMM v2.
    */
   async function graduateSide(
-    pdas: ReturnType<typeof derivePdas>,
+    pdas: Pdas,
     side: number,
   ): Promise<{ tx: string; pool: PublicKey; positionNftMint: Keypair }> {
     const mint = side === 0 ? pdas.mintA : pdas.mintB;
     const sideAccount = side === 0 ? pdas.sideA : pdas.sideB;
     const tokenVault = side === 0 ? pdas.tvA : pdas.tvB;
-    const solVault = side === 0 ? pdas.svA : pdas.svB;
+    const quoteVault = side === 0 ? pdas.qvA : pdas.qvB;
 
     const positionNftMint = Keypair.generate();
     const damm = deriveDammV2Pdas(mint, positionNftMint.publicKey);
@@ -230,19 +253,15 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
       preIxs.push(createAssociatedTokenAccountInstruction(creator.publicKey, payerTokenB, creator.publicKey, WSOL_MINT));
     }
     if (preIxs.length > 0) {
-      await provider.sendAndConfirm(new anchor.web3.Transaction().add(...preIxs));
+      await provider.sendAndConfirm(new Transaction().add(...preIxs));
     }
 
-    // Fund WSOL ATA with SOL from authority wallet
-    // (Program refunds sol_vault balance to authority after CPI)
-    const svInfo = await provider.connection.getAccountInfo(solVault);
-    const rentExempt = await provider.connection.getMinimumBalanceForRentExemption(8); // SolVault::SIZE
-    const solToSeed = svInfo!.lamports - rentExempt;
-    const fundTx = new anchor.web3.Transaction().add(
-      SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: payerTokenB, lamports: solToSeed }),
-      createSyncNativeInstruction(payerTokenB),
-    );
-    await provider.sendAndConfirm(fundTx);
+    // Fund WSOL ATA with SOL from quote vault balance
+    const qvInfo = await getAccount(provider.connection, quoteVault);
+    const solToSeed = Number(qvInfo.amount);
+    if (solToSeed > 0) {
+      await wrapSol(provider, creator.publicKey, solToSeed);
+    }
 
     const tx = await program.methods
       .graduateToDex(side)
@@ -252,7 +271,7 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
         sideAccount,
         tokenMint: mint,
         tokenVault,
-        solVault,
+        solVault: quoteVault, // quote vault in new model replaces sol vault
         wsolMint: WSOL_MINT,
         positionNftMint: positionNftMint.publicKey,
         positionNftAccount: damm.positionNftAccount,
@@ -282,10 +301,10 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
   // ─── Test Suite ───
 
   describe("Full Lifecycle: Market → Resolution → Graduation", () => {
-    let pdas: ReturnType<typeof derivePdas>;
+    let pdas: Pdas;
     let marketId: BN;
     let protocolFeeBalancePre: number;
-    let userClaimSolReceived: number = 0;
+    let userClaimWsolReceived: number = 0;
     let gradAResult: { tx: string; pool: PublicKey; positionNftMint: Keypair } | null = null;
 
     it("creates a market, buys, resolves, and graduates winning side to DAMM v2", async () => {
@@ -304,8 +323,9 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
       await buyForSide(pdas, 1, 0.5);
       console.log("  ✅ Bought (A=2 SOL, B=0.5 SOL)");
 
-      // Record protocol fee account balance before resolution
-      protocolFeeBalancePre = (await provider.connection.getAccountInfo(protocolFeeAccount.publicKey))?.lamports || 0;
+      // Record protocol fee balance before resolution
+      const protocolFeeInfo = await getAccount(provider.connection, protocolFeeAccount);
+      protocolFeeBalancePre = Number(protocolFeeInfo.amount);
 
       // TWAP
       console.log("  ⏳ Waiting for TWAP...");
@@ -322,18 +342,11 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
       console.log("  ⏳ Waiting for deadline...");
       await new Promise(r => setTimeout(r, 20000));
 
-      await program.methods.resolveMarket()
-        .accountsStrict({
-          resolver: creator.publicKey, market: pdas.market,
-          sideA: pdas.sideA, sideB: pdas.sideB,
-          solVaultA: pdas.svA, solVaultB: pdas.svB,
-          protocolFeeAccount: protocolFeeAccount.publicKey, creatorFeeAccount: creator.publicKey,
-          systemProgram: SystemProgram.programId,
-        }).rpc();
+      await resolveMarket(pdas);
 
       const marketData = await program.account.market.fetch(pdas.market);
       console.log(`  ✅ Resolved — Winner: Side ${marketData.winner === 0 ? "A" : "B"}`);
-      expect(marketData.winner).to.equal(0); // A bought more, should win
+      expect(marketData.winner).to.equal(0);
 
       // ─── User claim (sell some tokens after resolution, before graduation) ───
       console.log("  💱 Claiming: selling half of winning tokens...");
@@ -343,25 +356,28 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
       const tokensToSell = Math.floor(tokenBalancePre / 2);
 
       if (tokensToSell > 0) {
-        const solBefore = await provider.connection.getBalance(creator.publicKey);
+        const wsolBefore = await getAccount(provider.connection, creatorWsolAta);
+        const wsolBalBefore = Number(wsolBefore.amount);
         await program.methods
           .sellPostResolution(0, new BN(tokensToSell), new BN(1))
-          .accountsStrict({
+          .accounts({
             seller: creator.publicKey,
             market: pdas.market,
             sideAccount: pdas.sideA,
             tokenMint: pdas.mintA,
             tokenVault: pdas.tvA,
             sellerTokenAccount: ataA,
-            solVault: pdas.svA,
+            quoteMint: NATIVE_MINT,
+            quoteVault: pdas.qvA,
+            sellerQuoteAccount: creatorWsolAta,
             config: configPda,
-            systemProgram: SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
+            quoteTokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
-        const solAfter = await provider.connection.getBalance(creator.publicKey);
-        userClaimSolReceived = solAfter - solBefore;
-        console.log(`  ✅ Claimed ${tokensToSell} tokens → ~${userClaimSolReceived / LAMPORTS_PER_SOL} SOL`);
+        const wsolAfter = await getAccount(provider.connection, creatorWsolAta);
+        userClaimWsolReceived = Number(wsolAfter.amount) - wsolBalBefore;
+        console.log(`  ✅ Claimed ${tokensToSell} tokens → ~${userClaimWsolReceived / LAMPORTS_PER_SOL} WSOL`);
       }
 
       // Graduate winner (Side A)
@@ -400,8 +416,8 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
     it("verifies protocol fee was collected during resolution", async () => {
       if (!pdas) { console.log("  ⚠️  Skipped: no market"); return; }
 
-      const protocolFeeBalancePost = (await provider.connection.getAccountInfo(protocolFeeAccount.publicKey))?.lamports || 0;
-      const feeCollected = protocolFeeBalancePost - protocolFeeBalancePre;
+      const protocolFeeInfo = await getAccount(provider.connection, protocolFeeAccount);
+      const feeCollected = Number(protocolFeeInfo.amount) - protocolFeeBalancePre;
 
       console.log(`  💰 Protocol fee collected: ${feeCollected} lamports (${feeCollected / LAMPORTS_PER_SOL} SOL)`);
       expect(feeCollected).to.be.greaterThan(0);
@@ -410,8 +426,8 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
 
     it("verifies user claim (sell_post_resolution) worked before graduation", async () => {
       if (!pdas) { console.log("  ⚠️  Skipped: no market"); return; }
-      expect(userClaimSolReceived).to.be.greaterThan(0);
-      console.log(`  💰 User claimed ~${userClaimSolReceived / LAMPORTS_PER_SOL} SOL before graduation`);
+      expect(userClaimWsolReceived).to.be.greaterThan(0);
+      console.log(`  💰 User claimed ~${userClaimWsolReceived / LAMPORTS_PER_SOL} WSOL before graduation`);
       console.log("  ✅ User claim verified (sells via bonding curve, no penalty, pre-graduation)");
     });
 
@@ -420,10 +436,8 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
 
       console.log("  💸 Claiming LP fees from graduated pool...");
 
-      // Derive DAMM v2 PDAs for the graduated pool
       const damm = deriveDammV2Pdas(pdas.mintA, gradAResult.positionNftMint.publicKey);
 
-      // Fee receiver ATAs (authority-owned)
       const feeReceiverTokenA = await getAssociatedTokenAddress(pdas.mintA, creator.publicKey);
       const feeReceiverTokenB = await getAssociatedTokenAddress(WSOL_MINT, creator.publicKey);
 
@@ -455,34 +469,8 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
 
         console.log("  ✅ LP fee claim succeeded (fees may be 0 if no trades occurred)");
       } catch (e: any) {
-        // Fees may be 0 or the instruction might fail on localnet with no trading
         console.log(`  ⚠️  LP fee claim: ${e.message?.substring(0, 200)}`);
         console.log("  ℹ️  Expected on localnet — no trades on the Meteora pool yet");
-      }
-    });
-
-    it("closes SOL vault after graduation", async () => {
-      if (!pdas) { console.log("  ⚠️  Skipped: no market"); return; }
-
-      try {
-        await program.methods
-          .closeSolVault(0)
-          .accountsStrict({
-            closer: creator.publicKey,
-            market: pdas.market,
-            sideAccount: pdas.sideA,
-            solVault: pdas.svA,
-            tokenVault: pdas.tvA,
-            rentReceiver: creator.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
-          } as any)
-          .rpc();
-
-        const svAInfo = await provider.connection.getAccountInfo(pdas.svA);
-        expect(svAInfo).to.be.null;
-        console.log("  ✅ SOL vault A closed, rent recovered");
-      } catch (e: any) {
-        console.log(`  ⚠️  Close vault error: ${e.message?.substring(0, 200)}`);
       }
     });
   });
@@ -507,7 +495,7 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
             sideAccount: pdas.sideA,
             tokenMint: pdas.mintA,
             tokenVault: pdas.tvA,
-            solVault: pdas.svA,
+            solVault: pdas.qvA,
             wsolMint: WSOL_MINT,
             positionNftMint: positionNftMint.publicKey,
             positionNftAccount: damm.positionNftAccount,

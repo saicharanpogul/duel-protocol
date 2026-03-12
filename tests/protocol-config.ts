@@ -7,26 +7,25 @@ import {
   SystemProgram,
   LAMPORTS_PER_SOL,
   ComputeBudgetProgram,
+  Transaction,
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
+  NATIVE_MINT,
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
+  createSyncNativeInstruction,
+  getAccount,
 } from "@solana/spl-token";
 import { expect } from "chai";
 import BN from "bn.js";
-
-const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
-
-function findMetadataPda(mint: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("metadata"), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
-    TOKEN_METADATA_PROGRAM_ID
-  );
-  return pda;
-}
-
-const RENT_EXEMPT_MIN = 890_880;
+import {
+  TOKEN_METADATA_PROGRAM_ID,
+  findMetadataPda,
+  derivePdas,
+  wrapSol,
+  Pdas,
+} from "./helpers";
 
 describe("protocol-config", () => {
   const provider = anchor.AnchorProvider.env();
@@ -34,7 +33,6 @@ describe("protocol-config", () => {
 
   const program = anchor.workspace.Duel as Program<Duel>;
   const creator = provider.wallet;
-  const protocolFeeAccount = Keypair.generate();
   const configBase = Math.floor(Math.random() * 10_000_000) + 50_000_000;
 
   const [configPda] = PublicKey.findProgramAddressSync(
@@ -42,36 +40,69 @@ describe("protocol-config", () => {
     program.programId
   );
 
-  async function prefundPda(pda: PublicKey) {
-    const tx = new anchor.web3.Transaction().add(
-      SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: pda, lamports: RENT_EXEMPT_MIN })
-    );
-    await provider.sendAndConfirm(tx);
-  }
+  // Protocol fee = WSOL token account
+  let protocolFeeOwner: Keypair;
+  let protocolFeeAccount: PublicKey;
+  let creatorFeeAccount: PublicKey;
+  let creatorWsolAta: PublicKey;
 
-  function derivePdas(marketId: BN) {
-    const [market] = PublicKey.findProgramAddressSync(
-      [Buffer.from("market"), creator.publicKey.toBuffer(), marketId.toArrayLike(Buffer, "le", 8)],
-      program.programId
+  before(async () => {
+    // Setup protocol fee owner and their WSOL ATA
+    protocolFeeOwner = Keypair.generate();
+    const fundTx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: creator.publicKey,
+        toPubkey: protocolFeeOwner.publicKey,
+        lamports: LAMPORTS_PER_SOL / 10,
+      })
     );
-    const pda = (seed: string, idx: number) =>
-      PublicKey.findProgramAddressSync(
-        [Buffer.from(seed), market.toBuffer(), Buffer.from([idx])],
-        program.programId
-      )[0];
-    return {
-      market,
-      sideA: pda("side", 0), sideB: pda("side", 1),
-      mintA: pda("mint", 0), mintB: pda("mint", 1),
-      tvA: pda("token_vault", 0), tvB: pda("token_vault", 1),
-      svA: pda("sol_vault", 0), svB: pda("sol_vault", 1),
-    };
+    await provider.sendAndConfirm(fundTx);
+
+    protocolFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, protocolFeeOwner.publicKey);
+    const createAtaTx = new Transaction().add(
+      createAssociatedTokenAccountInstruction(
+        protocolFeeOwner.publicKey,
+        protocolFeeAccount,
+        protocolFeeOwner.publicKey,
+        NATIVE_MINT
+      )
+    );
+    await provider.sendAndConfirm(createAtaTx, [protocolFeeOwner]);
+
+    // Creator fee WSOL ATA
+    creatorFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, creator.publicKey);
+    try {
+      await getAccount(provider.connection, creatorFeeAccount);
+    } catch {
+      const tx = new Transaction().add(
+        createAssociatedTokenAccountInstruction(creator.publicKey, creatorFeeAccount, creator.publicKey, NATIVE_MINT)
+      );
+      await provider.sendAndConfirm(tx);
+    }
+    creatorWsolAta = creatorFeeAccount;
+
+    // Initialize config
+    try {
+      await program.account.programConfig.fetch(configPda);
+    } catch {
+      await program.methods
+        .initializeConfig(125, new BN(0))
+        .accounts({
+          admin: creator.publicKey,
+          protocolFeeAccount: protocolFeeAccount,
+          systemProgram: SystemProgram.programId,
+        } as any)
+        .rpc();
+    }
+  });
+
+  function deriveMarketPdas(marketId: BN) {
+    return derivePdas(program.programId, creator.publicKey, marketId);
   }
 
   async function createMarket(marketId: BN) {
-    const pdas = derivePdas(marketId);
+    const pdas = deriveMarketPdas(marketId);
     const now = Math.floor(Date.now() / 1000);
-    await prefundPda(protocolFeeAccount.publicKey);
     await program.methods
       .initializeMarket(
         marketId, new BN(now + 3600), new BN(600), new BN(10),
@@ -81,14 +112,18 @@ describe("protocol-config", () => {
         "Config Test A", "CTA", "", "Config Test B", "CTB", "",
         { unlocked: {} },
         new BN(0), 0, 0,
+        { twap: {} }, PublicKey.default, new BN(0),
       )
       .accounts({
         creator: creator.publicKey,
         market: pdas.market, sideA: pdas.sideA, sideB: pdas.sideB,
         tokenMintA: pdas.mintA, tokenMintB: pdas.mintB,
         tokenVaultA: pdas.tvA, tokenVaultB: pdas.tvB,
-        solVaultA: pdas.svA, solVaultB: pdas.svB,
-        protocolFeeAccount: protocolFeeAccount.publicKey,
+        quoteMint: NATIVE_MINT,
+        quoteTokenProgram: TOKEN_PROGRAM_ID,
+        quoteVaultA: pdas.qvA, quoteVaultB: pdas.qvB,
+        protocolFeeAccount: protocolFeeAccount,
+        creatorFeeAccount: creatorFeeAccount,
         config: configPda,
         metadataA: findMetadataPda(pdas.mintA),
         metadataB: findMetadataPda(pdas.mintB),
@@ -101,24 +136,6 @@ describe("protocol-config", () => {
       .rpc();
     return pdas;
   }
-
-  before(async () => {
-    // Ensure config is initialized
-    try {
-      await program.account.programConfig.fetch(configPda);
-    } catch {
-      await prefundPda(protocolFeeAccount.publicKey);
-      await program.methods
-        .initializeConfig(125, new BN(0))
-        .accounts({
-          admin: creator.publicKey,
-          config: configPda,
-          protocolFeeAccount: protocolFeeAccount.publicKey,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
-    }
-  });
 
   describe("Config State", () => {
     it("reads config state correctly", async () => {
@@ -172,14 +189,16 @@ describe("protocol-config", () => {
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
 
-      // Try buying — should fail
+      // Create token ATA and wrap SOL
       const ata = await getAssociatedTokenAddress(pdas.mintA, creator.publicKey);
       try {
         const createAtaIx = createAssociatedTokenAccountInstruction(
           creator.publicKey, ata, creator.publicKey, pdas.mintA
         );
-        await provider.sendAndConfirm(new anchor.web3.Transaction().add(createAtaIx));
+        await provider.sendAndConfirm(new Transaction().add(createAtaIx));
       } catch { }
+
+      await wrapSol(provider, creator.publicKey, LAMPORTS_PER_SOL);
 
       try {
         await program.methods
@@ -191,10 +210,12 @@ describe("protocol-config", () => {
             tokenMint: pdas.mintA,
             tokenVault: pdas.tvA,
             buyerTokenAccount: ata,
-            solVault: pdas.svA,
+            quoteMint: NATIVE_MINT,
+            quoteVault: pdas.qvA,
+            buyerQuoteAccount: creatorWsolAta,
             config: configPda,
-            systemProgram: SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
+            quoteTokenProgram: TOKEN_PROGRAM_ID,
           })
           .rpc();
         expect.fail("should have rejected buy");
@@ -268,8 +289,7 @@ describe("protocol-config", () => {
   describe("Admin Transfer", () => {
     it("should transfer admin to new key", async () => {
       const newAdmin = Keypair.generate();
-      // Fund new admin
-      const tx = new anchor.web3.Transaction().add(
+      const tx = new Transaction().add(
         SystemProgram.transfer({
           fromPubkey: creator.publicKey,
           toPubkey: newAdmin.publicKey,
@@ -278,7 +298,6 @@ describe("protocol-config", () => {
       );
       await provider.sendAndConfirm(tx);
 
-      // Transfer admin to newAdmin
       await program.methods
         .updateConfig(null, null, null)
         .accounts({
@@ -293,7 +312,7 @@ describe("protocol-config", () => {
       expect(config.admin.toString()).to.equal(newAdmin.publicKey.toString());
       console.log(`    Admin transferred to ${newAdmin.publicKey.toString().slice(0, 8)}...`);
 
-      // Transfer back (need newAdmin to sign)
+      // Transfer back
       await program.methods
         .updateConfig(null, null, null)
         .accounts({
@@ -312,7 +331,7 @@ describe("protocol-config", () => {
 
     it("should reject non-admin update", async () => {
       const nonAdmin = Keypair.generate();
-      const tx = new anchor.web3.Transaction().add(
+      const tx = new Transaction().add(
         SystemProgram.transfer({
           fromPubkey: creator.publicKey,
           toPubkey: nonAdmin.publicKey,
