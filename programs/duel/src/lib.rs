@@ -182,4 +182,10 @@ pub mod duel {
     ) -> Result<()> {
         instructions::close_market::handler(ctx, side)
     }
+
+    pub fn emergency_resolve(
+        ctx: Context<EmergencyResolve>,
+    ) -> Result<()> {
+        instructions::emergency_resolve::handler(ctx)
+    }
 }

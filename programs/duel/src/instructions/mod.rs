@@ -16,6 +16,7 @@ pub mod lock_position;
 pub mod remove_liquidity;
 pub mod close_position;
 pub mod close_market;
+pub mod emergency_resolve;
 
 pub use initialize_market::*;
 pub use initialize_config::*;
@@ -33,4 +34,5 @@ pub use lock_position::*;
 pub use remove_liquidity::*;
 pub use close_position::*;
 pub use close_market::*;
+pub use emergency_resolve::*;
 
