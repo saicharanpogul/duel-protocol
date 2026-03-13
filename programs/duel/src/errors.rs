@@ -56,4 +56,8 @@ pub enum DuelError {
     UnauthorizedOracle,
     #[msg("Invalid winning side (must be 0 or 1)")]
     InvalidWinningSide,
+    #[msg("Market is currently locked (re-entrancy protection)")]
+    ReentrancyLocked,
+    #[msg("Emergency resolution window has not passed yet")]
+    EmergencyResolveTooEarly,
 }

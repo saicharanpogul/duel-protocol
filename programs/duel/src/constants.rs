@@ -27,3 +27,9 @@ pub const MIN_CURVE_EXPONENT: u8 = 1;
 
 /// Maximum curve exponent
 pub const MAX_CURVE_EXPONENT: u8 = 3;
+
+/// Minimum market duration in seconds (1 hour)
+pub const MIN_MARKET_DURATION: u64 = 3_600;
+
+/// Default emergency resolution window (24 hours after deadline)
+pub const DEFAULT_EMERGENCY_WINDOW: u64 = 86_400;

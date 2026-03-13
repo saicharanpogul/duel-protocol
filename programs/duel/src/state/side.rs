@@ -22,6 +22,8 @@ pub struct Side {
     pub twap_accumulator: u128,
     /// Last observation value for lagging TWAP (0 if disabled or first sample)
     pub last_observation: u64,
+    /// Accumulated sell penalty (quote tokens retained in vault beyond curve math)
+    pub penalty_accumulated: u64,
     /// PDA bump
     pub bump: u8,
 }
@@ -38,7 +40,8 @@ impl Side {
         + 8   // peak_reserve
         + 16  // twap_accumulator
         + 8   // last_observation
+        + 8   // penalty_accumulated
         + 1   // bump
-        + 24; // padding (reduced from 32)
+        + 16; // padding (reduced from 24)
 }
 

@@ -92,6 +92,8 @@ pub struct Market {
     pub oracle_authority: Pubkey,
     /// Dispute window in seconds after deadline (for OracleWithTwapFallback)
     pub oracle_dispute_window: u64,
+    /// Emergency resolution window in seconds after deadline (draw fallback)
+    pub emergency_window: u64,
     /// Re-entrancy lock (prevents concurrent buy/sell during CPI)
     pub locked: bool,
     /// PDA bump
@@ -130,7 +132,8 @@ impl Market {
         + 1   // resolution_mode
         + 32  // oracle_authority
         + 8   // oracle_dispute_window
+        + 8   // emergency_window
         + 1   // locked
         + 1   // bump
-        + 64; // padding
+        + 56; // padding (reduced from 64)
 }

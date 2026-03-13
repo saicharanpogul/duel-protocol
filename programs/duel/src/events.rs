@@ -15,7 +15,7 @@ pub struct TokensBought {
     pub market: Pubkey,
     pub side: u8,
     pub buyer: Pubkey,
-    pub sol_amount: u64,
+    pub quote_amount: u64,
     pub tokens_received: u64,
     pub new_price: u64,
 }
@@ -26,7 +26,7 @@ pub struct TokensSold {
     pub side: u8,
     pub seller: Pubkey,
     pub token_amount: u64,
-    pub sol_received: u64,
+    pub quote_received: u64,
     pub penalty_applied: u64,
     pub new_price: u64,
 }
@@ -52,6 +52,7 @@ pub struct MarketResolved {
     pub transfer_amount: u64,
     pub protocol_fee: u64,
     pub creator_fee: u64,
+    pub resolution_mode: u8,
 }
 
 #[event]
@@ -61,4 +62,25 @@ pub struct TokensGraduated {
     pub dex_pool: Pubkey,
     pub sol_seeded: u64,
     pub tokens_seeded: u64,
+}
+
+#[event]
+pub struct ConfigUpdated {
+    pub admin: Pubkey,
+    pub paused: bool,
+    pub default_protocol_fee_bps: u16,
+    pub market_creation_fee: u64,
+}
+
+#[event]
+pub struct MarketClosed {
+    pub market: Pubkey,
+    pub authority: Pubkey,
+}
+
+#[event]
+pub struct EmergencyResolved {
+    pub market: Pubkey,
+    pub resolver: Pubkey,
+    pub timestamp: i64,
 }

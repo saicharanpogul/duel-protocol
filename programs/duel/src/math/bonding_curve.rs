@@ -31,6 +31,7 @@ pub fn price(supply: u64, params: &CurveParams) -> Result<u64> {
 
     let result = term.checked_add(b).ok_or(DuelError::MathOverflow)?;
 
+    require!(result <= u64::MAX as u128, DuelError::MathOverflow);
     Ok(result as u64)
 }
 
@@ -126,6 +127,7 @@ pub fn sol_out(token_amount: u64, current_supply: u64, params: &CurveParams) -> 
 
     let result = r_current.checked_sub(r_new).ok_or(DuelError::MathOverflow)?;
 
+    require!(result <= u64::MAX as u128, DuelError::MathOverflow);
     Ok(result as u64)
 }
 
