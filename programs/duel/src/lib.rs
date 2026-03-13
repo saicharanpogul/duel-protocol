@@ -30,8 +30,9 @@ pub mod duel {
         paused: Option<bool>,
         default_protocol_fee_bps: Option<u16>,
         market_creation_fee: Option<u64>,
+        min_market_duration: Option<u64>,
     ) -> Result<()> {
-        instructions::update_config::handler(ctx, paused, default_protocol_fee_bps, market_creation_fee)
+        instructions::update_config::handler(ctx, paused, default_protocol_fee_bps, market_creation_fee, min_market_duration)
     }
 
     pub fn initialize_market(

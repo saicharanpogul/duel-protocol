@@ -14,6 +14,8 @@ pub struct ProgramConfig {
     pub protocol_fee_account: Pubkey,
     /// Market creation fee in lamports (0 = free)
     pub market_creation_fee: u64,
+    /// Minimum market duration in seconds (admin-configurable)
+    pub min_market_duration: u64,
     /// PDA bump
     pub bump: u8,
 }
@@ -25,6 +27,7 @@ impl ProgramConfig {
         + 2   // default_protocol_fee_bps
         + 32  // protocol_fee_account
         + 8   // market_creation_fee
+        + 8   // min_market_duration
         + 1   // bump
-        + 32; // padding
+        + 24; // padding (reduced from 32)
 }

@@ -40,6 +40,7 @@ pub fn handler(
     config.default_protocol_fee_bps = default_protocol_fee_bps;
     config.protocol_fee_account = ctx.accounts.protocol_fee_account.key();
     config.market_creation_fee = market_creation_fee;
+    config.min_market_duration = crate::constants::MIN_MARKET_DURATION;
     config.bump = ctx.bumps.config;
 
     Ok(())

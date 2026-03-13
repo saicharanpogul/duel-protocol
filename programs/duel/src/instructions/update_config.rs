@@ -30,6 +30,7 @@ pub fn handler(
     paused: Option<bool>,
     default_protocol_fee_bps: Option<u16>,
     market_creation_fee: Option<u64>,
+    min_market_duration: Option<u64>,
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
 
@@ -44,6 +45,11 @@ pub fn handler(
 
     if let Some(fee) = market_creation_fee {
         config.market_creation_fee = fee;
+    }
+
+    if let Some(duration) = min_market_duration {
+        require!(duration >= 10, DuelError::InvalidMarketConfig); // minimum 10 seconds
+        config.min_market_duration = duration;
     }
 
     if let Some(ref new_fee_account) = ctx.accounts.new_protocol_fee_account {

@@ -133,7 +133,7 @@ describe("protocol-config", () => {
   describe("Pause / Unpause", () => {
     it("should pause protocol via update_config", async () => {
       await program.methods
-        .updateConfig(true, null, null)
+        .updateConfig(true, null, null, null)
         .accounts({
           admin: creator.publicKey,
           config: configPda,
@@ -160,7 +160,7 @@ describe("protocol-config", () => {
     it("should reject buy when paused", async () => {
       // Unpause temporarily to create market, then re-pause to test buy rejection
       await program.methods
-        .updateConfig(false, null, null)
+        .updateConfig(false, null, null, null)
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
 
@@ -168,7 +168,7 @@ describe("protocol-config", () => {
 
       // Re-pause
       await program.methods
-        .updateConfig(true, null, null)
+        .updateConfig(true, null, null, null)
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
 
@@ -210,7 +210,7 @@ describe("protocol-config", () => {
 
     it("should unpause and resume trading", async () => {
       await program.methods
-        .updateConfig(false, null, null)
+        .updateConfig(false, null, null, null)
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
 
@@ -223,7 +223,7 @@ describe("protocol-config", () => {
   describe("Fee Updates", () => {
     it("should update default_protocol_fee_bps", async () => {
       await program.methods
-        .updateConfig(null, 200, null)
+        .updateConfig(null, 200, null, null)
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
 
@@ -233,7 +233,7 @@ describe("protocol-config", () => {
 
       // Restore
       await program.methods
-        .updateConfig(null, 125, null)
+        .updateConfig(null, 125, null, null)
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
     });
@@ -241,7 +241,7 @@ describe("protocol-config", () => {
     it("should reject fee_bps > 500", async () => {
       try {
         await program.methods
-          .updateConfig(null, 600, null)
+          .updateConfig(null, 600, null, null)
           .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
           .rpc();
         expect.fail("should have rejected");
@@ -253,7 +253,7 @@ describe("protocol-config", () => {
 
     it("should update market_creation_fee", async () => {
       await program.methods
-        .updateConfig(null, null, new BN(10_000))
+        .updateConfig(null, null, new BN(10_000), null)
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
 
@@ -263,7 +263,7 @@ describe("protocol-config", () => {
 
       // Restore to 0
       await program.methods
-        .updateConfig(null, null, new BN(0))
+        .updateConfig(null, null, new BN(0), null)
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
     });
@@ -282,7 +282,7 @@ describe("protocol-config", () => {
       await provider.sendAndConfirm(tx);
 
       await program.methods
-        .updateConfig(null, null, null)
+        .updateConfig(null, null, null, null)
         .accounts({
           admin: creator.publicKey,
           config: configPda,
@@ -297,7 +297,7 @@ describe("protocol-config", () => {
 
       // Transfer back
       await program.methods
-        .updateConfig(null, null, null)
+        .updateConfig(null, null, null, null)
         .accounts({
           admin: newAdmin.publicKey,
           config: configPda,
@@ -325,7 +325,7 @@ describe("protocol-config", () => {
 
       try {
         await program.methods
-          .updateConfig(true, null, null)
+          .updateConfig(true, null, null, null)
           .accounts({
             admin: nonAdmin.publicKey,
             config: configPda,

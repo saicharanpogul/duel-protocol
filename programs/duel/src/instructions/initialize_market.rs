@@ -201,7 +201,7 @@ pub fn handler(
     // Validation
     require!(deadline > now, DuelError::InvalidMarketConfig);
     let duration = (deadline - now) as u64;
-    require!(duration >= MIN_MARKET_DURATION, DuelError::InvalidMarketConfig);
+    require!(duration >= ctx.accounts.config.min_market_duration, DuelError::InvalidMarketConfig);
     require!(
         twap_window > 0 && twap_window < duration,
         DuelError::InvalidMarketConfig
