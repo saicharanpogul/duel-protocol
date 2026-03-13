@@ -55,24 +55,6 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
   let creatorWsolAta: PublicKey;
 
   before(async () => {
-    protocolFeeOwner = Keypair.generate();
-    const fundTx = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: creator.publicKey,
-        toPubkey: protocolFeeOwner.publicKey,
-        lamports: LAMPORTS_PER_SOL / 10,
-      })
-    );
-    await provider.sendAndConfirm(fundTx);
-
-    protocolFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, protocolFeeOwner.publicKey);
-    const createAtaTx = new Transaction().add(
-      createAssociatedTokenAccountInstruction(
-        protocolFeeOwner.publicKey, protocolFeeAccount, protocolFeeOwner.publicKey, NATIVE_MINT
-      )
-    );
-    await provider.sendAndConfirm(createAtaTx, [protocolFeeOwner]);
-
     creatorFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, creator.publicKey);
     try {
       await getAccount(provider.connection, creatorFeeAccount);
@@ -85,15 +67,22 @@ describe("DEX Graduation — Full E2E with Meteora DAMM v2", () => {
     creatorWsolAta = creatorFeeAccount;
 
     try {
-      await program.account.programConfig.fetch(configPda);
+      const existingConfig = await program.account.programConfig.fetch(configPda);
+      protocolFeeAccount = existingConfig.protocolFeeAccount;
     } catch {
+      protocolFeeOwner = Keypair.generate();
+      const fundTx = new Transaction().add(
+        SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: protocolFeeOwner.publicKey, lamports: LAMPORTS_PER_SOL / 10 })
+      );
+      await provider.sendAndConfirm(fundTx);
+      protocolFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, protocolFeeOwner.publicKey);
+      await provider.sendAndConfirm(
+        new Transaction().add(createAssociatedTokenAccountInstruction(protocolFeeOwner.publicKey, protocolFeeAccount, protocolFeeOwner.publicKey, NATIVE_MINT)),
+        [protocolFeeOwner]
+      );
       await program.methods
         .initializeConfig(125, new BN(0))
-        .accounts({
-          admin: creator.publicKey,
-          protocolFeeAccount: protocolFeeAccount,
-          systemProgram: SystemProgram.programId,
-        } as any)
+        .accounts({ admin: creator.publicKey, protocolFeeAccount, systemProgram: SystemProgram.programId } as any)
         .rpc();
     }
   });

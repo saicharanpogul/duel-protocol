@@ -142,31 +142,6 @@ describe("duel", () => {
       program.programId
     );
 
-    // Create protocol fee owner + their WSOL ATA for receiving fees
-    protocolFeeOwner = Keypair.generate();
-    protocolFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, protocolFeeOwner.publicKey);
-
-    // Fund protocol fee owner so they can create ATA
-    const fundTx = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: creator.publicKey,
-        toPubkey: protocolFeeOwner.publicKey,
-        lamports: LAMPORTS_PER_SOL / 10,
-      })
-    );
-    await provider.sendAndConfirm(fundTx);
-
-    // Create protocol fee WSOL ATA
-    const createProtocolAtaTx = new Transaction().add(
-      createAssociatedTokenAccountInstruction(
-        protocolFeeOwner.publicKey,
-        protocolFeeAccount,
-        protocolFeeOwner.publicKey,
-        NATIVE_MINT
-      )
-    );
-    await provider.sendAndConfirm(createProtocolAtaTx, [protocolFeeOwner]);
-
     // Create creator fee WSOL ATA
     creatorFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, creator.publicKey);
     try {
@@ -186,10 +161,30 @@ describe("duel", () => {
     // Create creator WSOL ATA (for buying/selling)
     creatorWsolAta = creatorFeeAccount; // same ATA
 
-    // Initialize ProgramConfig (once)
+    // Initialize ProgramConfig or fetch existing
     try {
-      await program.account.programConfig.fetch(configPda);
+      const existingConfig = await program.account.programConfig.fetch(configPda);
+      protocolFeeAccount = existingConfig.protocolFeeAccount;
     } catch {
+      protocolFeeOwner = Keypair.generate();
+      protocolFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, protocolFeeOwner.publicKey);
+      const fundTx = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: creator.publicKey,
+          toPubkey: protocolFeeOwner.publicKey,
+          lamports: LAMPORTS_PER_SOL / 10,
+        })
+      );
+      await provider.sendAndConfirm(fundTx);
+      const createProtocolAtaTx = new Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          protocolFeeOwner.publicKey,
+          protocolFeeAccount,
+          protocolFeeOwner.publicKey,
+          NATIVE_MINT
+        )
+      );
+      await provider.sendAndConfirm(createProtocolAtaTx, [protocolFeeOwner]);
       await program.methods
         .initializeConfig(125, new BN(0))
         .accounts({

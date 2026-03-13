@@ -46,25 +46,6 @@ describe("twap-advanced", () => {
   let creatorWsolAta: PublicKey;
 
   before(async () => {
-    // Setup protocol fee owner and their WSOL ATA
-    protocolFeeOwner = Keypair.generate();
-    const fundTx = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: creator.publicKey,
-        toPubkey: protocolFeeOwner.publicKey,
-        lamports: LAMPORTS_PER_SOL / 10,
-      })
-    );
-    await provider.sendAndConfirm(fundTx);
-
-    protocolFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, protocolFeeOwner.publicKey);
-    const createAtaTx = new Transaction().add(
-      createAssociatedTokenAccountInstruction(
-        protocolFeeOwner.publicKey, protocolFeeAccount, protocolFeeOwner.publicKey, NATIVE_MINT
-      )
-    );
-    await provider.sendAndConfirm(createAtaTx, [protocolFeeOwner]);
-
     // Creator fee WSOL ATA
     creatorFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, creator.publicKey);
     try {
@@ -77,10 +58,30 @@ describe("twap-advanced", () => {
     }
     creatorWsolAta = creatorFeeAccount;
 
-    // Initialize config
+    // Initialize config or fetch existing
     try {
-      await program.account.programConfig.fetch(configPda);
+      const existingConfig = await program.account.programConfig.fetch(configPda);
+      protocolFeeAccount = existingConfig.protocolFeeAccount;
     } catch {
+      // Config doesn't exist yet — create fee owner and initialize
+      protocolFeeOwner = Keypair.generate();
+      const fundTx = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: creator.publicKey,
+          toPubkey: protocolFeeOwner.publicKey,
+          lamports: LAMPORTS_PER_SOL / 10,
+        })
+      );
+      await provider.sendAndConfirm(fundTx);
+
+      protocolFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, protocolFeeOwner.publicKey);
+      const createAtaTx = new Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          protocolFeeOwner.publicKey, protocolFeeAccount, protocolFeeOwner.publicKey, NATIVE_MINT
+        )
+      );
+      await provider.sendAndConfirm(createAtaTx, [protocolFeeOwner]);
+
       await program.methods
         .initializeConfig(125, new BN(0))
         .accounts({

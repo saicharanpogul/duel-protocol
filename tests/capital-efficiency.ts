@@ -28,22 +28,24 @@ describe("duel - capital efficiency & battle testing", () => {
   let creatorWsolAta: PublicKey;
 
   before(async () => {
-    protocolFeeOwner = Keypair.generate();
-    const fundTx = new Transaction().add(
-      SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: protocolFeeOwner.publicKey, lamports: LAMPORTS_PER_SOL / 10 })
-    );
-    await provider.sendAndConfirm(fundTx);
-    protocolFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, protocolFeeOwner.publicKey);
-    await provider.sendAndConfirm(
-      new Transaction().add(createAssociatedTokenAccountInstruction(protocolFeeOwner.publicKey, protocolFeeAccount, protocolFeeOwner.publicKey, NATIVE_MINT)),
-      [protocolFeeOwner]
-    );
     creatorFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, creator.publicKey);
     try { await getAccount(provider.connection, creatorFeeAccount); } catch {
       await provider.sendAndConfirm(new Transaction().add(createAssociatedTokenAccountInstruction(creator.publicKey, creatorFeeAccount, creator.publicKey, NATIVE_MINT)));
     }
     creatorWsolAta = creatorFeeAccount;
-    try { await program.account.programConfig.fetch(configPda); } catch {
+    try {
+      const existingConfig = await program.account.programConfig.fetch(configPda);
+      protocolFeeAccount = existingConfig.protocolFeeAccount;
+    } catch {
+      protocolFeeOwner = Keypair.generate();
+      await provider.sendAndConfirm(
+        new Transaction().add(SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: protocolFeeOwner.publicKey, lamports: LAMPORTS_PER_SOL / 10 }))
+      );
+      protocolFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, protocolFeeOwner.publicKey);
+      await provider.sendAndConfirm(
+        new Transaction().add(createAssociatedTokenAccountInstruction(protocolFeeOwner.publicKey, protocolFeeAccount, protocolFeeOwner.publicKey, NATIVE_MINT)),
+        [protocolFeeOwner]
+      );
       await program.methods.initializeConfig(125, new BN(0)).accounts({ admin: creator.publicKey, protocolFeeAccount, systemProgram: SystemProgram.programId } as any).rpc();
     }
   });
