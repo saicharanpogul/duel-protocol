@@ -51,3 +51,9 @@ export const MIN_SQRT_PRICE = BigInt("4295048016");
 
 /** Meteora DAMM v2 MAX_SQRT_PRICE */
 export const MAX_SQRT_PRICE = BigInt("79226673521066979257578248091");
+
+/** Native SOL mint (wrapped SOL) */
+export { NATIVE_MINT } from "@solana/spl-token";
+
+/** Minimum market duration in seconds (matches on-chain constant) */
+export const MIN_MARKET_DURATION = 10;
