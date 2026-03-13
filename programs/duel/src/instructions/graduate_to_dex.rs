@@ -303,13 +303,68 @@ pub fn handler(ctx: Context<GraduateToDex>, side: u8) -> Result<()> {
 }
 
 /// Compute sqrt_price in Q64.64 format: sqrt(sol_amount / token_amount) * 2^64
+/// Uses integer-only Newton's method — no f64 (non-deterministic on BPF).
 fn compute_sqrt_price_q64(sol_amount: u64, token_amount: u64) -> u128 {
     if token_amount == 0 || sol_amount == 0 {
         return 1u128 << 64; // Default to 1.0
     }
-    let price_f = (sol_amount as f64) / (token_amount as f64);
-    let sqrt_price_f = price_f.sqrt();
-    (sqrt_price_f * ((1u128 << 64) as f64)) as u128
+
+    // We want: sqrt(sol/token) * 2^64
+    // = sqrt(sol * 2^128 / token)
+    // This avoids f64 entirely.
+
+    // Compute (sol * 2^128) / token as a u256-like value using u128 arithmetic.
+    // Since sol_amount and token_amount are u64, sol * 2^128 overflows u128.
+    // Instead: sqrt(sol/token) * 2^64 = sqrt(sol) * 2^64 / sqrt(token)
+    // = isqrt(sol * 2^128 / token) [if we can compute this without overflow]
+    //
+    // Alternative safe approach:
+    // sqrt(sol/token) * 2^64 = isqrt(sol) * 2^64 / isqrt(token) [approximate]
+    // but this loses precision. Better: compute with scaling.
+    //
+    // Safe: sol_scaled = sol * 2^64, then sqrt(sol_scaled / token) * 2^32
+    // But we need Q64.64 so: sqrt(sol * 2^128 / token)
+    //
+    // Use two-step: numerator = sol_amount as u128 * (1u128 << 64)
+    // ratio = numerator / token_amount
+    // result = isqrt(ratio) * (1u128 << 32) ... no, let's just do it properly.
+
+    // ratio_q128 = (sol_amount << 128) / token_amount
+    // sqrt_price_q64 = isqrt(ratio_q128)
+    // Since we can't do << 128 in u128, split:
+    // ratio_q128 = (sol_amount << 64) / token_amount * (1 << 64) [approximate]
+    let sol = sol_amount as u128;
+    let tok = token_amount as u128;
+
+    // Compute: value = sol * 2^128 / tok
+    // Split as: hi = (sol << 64) / tok, then result = isqrt(hi) << 32
+    // More precise: value = (sol << 64) / tok, then result = isqrt(value) << 32
+    // Actually: sqrt(sol/tok * 2^128) = sqrt(sol * 2^128 / tok)
+    // = sqrt((sol << 64) / tok) << 32
+
+    let scaled = sol.checked_shl(64).unwrap_or(u128::MAX) / tok;
+    // Now isqrt(scaled) gives us sqrt(sol/tok) * 2^32
+    // We need * 2^64, so shift left by 32
+    let sqrt_scaled = isqrt_u128(scaled);
+    sqrt_scaled.checked_shl(32).unwrap_or(u128::MAX).max(1)
+}
+
+/// Integer square root via Newton's method (deterministic, BPF-safe)
+fn isqrt_u128(n: u128) -> u128 {
+    if n == 0 {
+        return 0;
+    }
+    if n == 1 {
+        return 1;
+    }
+    // Initial guess: start with n/2 or based on bit length
+    let mut x = n;
+    let mut y = (x + 1) / 2;
+    while y < x {
+        x = y;
+        y = (x + n / x) / 2;
+    }
+    x
 }
 
 /// Compute initial liquidity from seed amounts and sqrt_price

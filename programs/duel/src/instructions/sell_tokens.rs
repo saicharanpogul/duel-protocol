@@ -86,6 +86,11 @@ pub fn handler(
     require!(clock.unix_timestamp < market.deadline, DuelError::MarketExpired);
     require!(token_amount > 0, DuelError::InsufficientTokenBalance);
 
+    // Activate re-entrancy lock
+    let market = &mut ctx.accounts.market;
+    require!(!market.locked, DuelError::ReentrancyLocked);
+    market.locked = true;
+
     let side_account = &ctx.accounts.side_account;
 
     // Calculate raw quote out
@@ -176,8 +181,12 @@ pub fn handler(
         .checked_sub(token_amount)
         .ok_or(DuelError::MathOverflow)?;
 
-    // Penalty quote stays in the reserve (locked)
+    // Track penalty accumulated on side (for proper redemption math)
     let penalty_amount = raw_quote.checked_sub(quote_after_penalty).ok_or(DuelError::MathOverflow)?;
+    side_account.penalty_accumulated = side_account
+        .penalty_accumulated
+        .checked_add(penalty_amount)
+        .ok_or(DuelError::MathOverflow)?;
 
     // Calculate new price for event
     let market = &ctx.accounts.market;
@@ -189,10 +198,13 @@ pub fn handler(
         side,
         seller: ctx.accounts.seller.key(),
         token_amount,
-        sol_received: quote_after_penalty,
+        quote_received: quote_after_penalty,
         penalty_applied: penalty_amount,
         new_price,
     });
+
+    // Release re-entrancy lock
+    ctx.accounts.market.locked = false;
 
     Ok(())
 }

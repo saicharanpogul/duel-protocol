@@ -12,14 +12,23 @@ use crate::state::*;
 #[derive(Accounts)]
 #[instruction(side: u8)]
 pub struct RemoveLiquidity<'info> {
+    /// Market creator or protocol admin
     #[account(mut)]
     pub authority: Signer<'info>,
 
     #[account(
         constraint = market.status == MarketStatus::Resolved @ DuelError::MarketNotResolved,
         constraint = market.lp_lock_mode == LpLockMode::Unlocked @ DuelError::LpLocked,
+        constraint = market.authority == authority.key() || config.admin == authority.key() @ DuelError::InvalidMarketConfig,
     )]
     pub market: Box<Account<'info, Market>>,
+
+    /// Protocol config (for admin check)
+    #[account(
+        seeds = [b"config"],
+        bump = config.bump,
+    )]
+    pub config: Account<'info, ProgramConfig>,
 
     #[account(
         constraint = side_account.market == market.key() @ DuelError::InvalidSide,

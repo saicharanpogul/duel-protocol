@@ -161,7 +161,7 @@ pub fn handler(
         side,
         seller: ctx.accounts.seller.key(),
         token_amount,
-        sol_received: quote_amount,
+        quote_received: quote_amount,
         penalty_applied: 0,
         new_price,
     });

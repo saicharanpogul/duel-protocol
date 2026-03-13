@@ -49,11 +49,8 @@ pub struct CloseQuoteVault<'info> {
 pub fn handler(ctx: Context<CloseQuoteVault>, side: u8) -> Result<()> {
     require!(side <= 1, DuelError::InvalidSide);
 
+    // Can close vaults if side is graduated OR if vault is already empty (covers losing side)
     let market = &ctx.accounts.market;
-
-    // Side must be graduated
-    let graduated = if side == 0 { market.graduated_a } else { market.graduated_b };
-    require!(graduated, DuelError::NotGraduated);
 
     // Build market PDA signer seeds
     let authority_key = market.authority;

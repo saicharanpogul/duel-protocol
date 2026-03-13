@@ -86,6 +86,11 @@ pub fn handler(
     require!(clock.unix_timestamp < market.deadline, DuelError::MarketExpired);
     require!(quote_amount > 0, DuelError::InsufficientSolAmount);
 
+    // Activate re-entrancy lock
+    let market = &mut ctx.accounts.market;
+    require!(!market.locked, DuelError::ReentrancyLocked);
+    market.locked = true;
+
     let side_account = &ctx.accounts.side_account;
 
     // Calculate tokens out (bonding curve math uses quote amount)
@@ -168,10 +173,13 @@ pub fn handler(
         market: market_key,
         side,
         buyer: ctx.accounts.buyer.key(),
-        sol_amount: quote_amount,
+        quote_amount,
         tokens_received: tokens,
         new_price,
     });
+
+    // Release re-entrancy lock
+    ctx.accounts.market.locked = false;
 
     Ok(())
 }

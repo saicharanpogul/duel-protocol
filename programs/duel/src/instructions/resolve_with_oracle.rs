@@ -255,6 +255,7 @@ pub fn handler(ctx: Context<ResolveWithOracle>, winning_side: u8) -> Result<()> 
         transfer_amount: transfer_to_winner,
         protocol_fee,
         creator_fee,
+        resolution_mode: 1,
     });
 
     Ok(())

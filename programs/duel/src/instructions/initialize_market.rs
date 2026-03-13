@@ -115,7 +115,11 @@ pub struct InitializeMarket<'info> {
     )]
     pub quote_vault_b: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// CHECK: Arbitrary fee account, no validation needed
+    /// CHECK: Validated against config.protocol_fee_account
+    /// Protocol fee recipient — must match config
+    #[account(
+        constraint = protocol_fee_account.key() == config.protocol_fee_account @ DuelError::InvalidFeeConfig,
+    )]
     pub protocol_fee_account: UncheckedAccount<'info>,
 
     /// Program config (pause check + market creation fee)
@@ -124,7 +128,7 @@ pub struct InitializeMarket<'info> {
         bump = config.bump,
         constraint = !config.paused @ DuelError::ProtocolPaused,
     )]
-    pub config: Account<'info, ProgramConfig>,
+    pub config: Box<Account<'info, ProgramConfig>>,
 
     /// Metadata account for token A
     /// CHECK: Created by Metaplex CPI, validated by seeds
@@ -153,8 +157,11 @@ pub struct InitializeMarket<'info> {
     )]
     pub token_metadata_program: UncheckedAccount<'info>,
 
-    /// Creator fee recipient (must be a quote token account)
+    /// Creator fee recipient — must be a valid account
     /// CHECK: Stored on market, validated at resolution time
+    #[account(
+        constraint = creator_fee_account.key() != Pubkey::default() @ DuelError::InvalidFeeConfig,
+    )]
     pub creator_fee_account: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
@@ -193,8 +200,10 @@ pub fn handler(
 
     // Validation
     require!(deadline > now, DuelError::InvalidMarketConfig);
+    let duration = (deadline - now) as u64;
+    require!(duration >= MIN_MARKET_DURATION, DuelError::InvalidMarketConfig);
     require!(
-        twap_window > 0 && twap_window < ((deadline - now) as u64),
+        twap_window > 0 && twap_window < duration,
         DuelError::InvalidMarketConfig
     );
     require!(
@@ -284,6 +293,11 @@ pub fn handler(
     market.resolution_mode = resolution_mode;
     market.oracle_authority = oracle_authority;
     market.oracle_dispute_window = oracle_dispute_window;
+    market.emergency_window = if oracle_dispute_window > 0 {
+        oracle_dispute_window.max(DEFAULT_EMERGENCY_WINDOW)
+    } else {
+        DEFAULT_EMERGENCY_WINDOW
+    };
     market.locked = false;
     market.bump = ctx.bumps.market;
 
@@ -298,6 +312,7 @@ pub fn handler(
     side_a.peak_reserve = 0;
     side_a.twap_accumulator = 0;
     side_a.last_observation = 0;
+    side_a.penalty_accumulated = 0;
     side_a.bump = ctx.bumps.side_a;
 
     // Initialize Side B
@@ -311,6 +326,7 @@ pub fn handler(
     side_b.peak_reserve = 0;
     side_b.twap_accumulator = 0;
     side_b.last_observation = 0;
+    side_b.penalty_accumulated = 0;
     side_b.bump = ctx.bumps.side_b;
 
     // Mint total supply into each token vault

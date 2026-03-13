@@ -128,7 +128,7 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
     require!(status != MarketStatus::Resolved, DuelError::MarketAlreadyResolved);
 
     // Must have sufficient TWAP samples
-    let min_samples = (twap_window / twap_interval).max(1) as u32;
+    let min_samples = ((twap_window / twap_interval).max(1) / 2).max(1) as u32;
     require!(twap_samples_count >= min_samples, DuelError::NoTwapSamples);
 
     let samples = twap_samples_count as u128;
@@ -181,6 +181,7 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
             transfer_amount: 0,
             protocol_fee: 0,
             creator_fee: 0,
+            resolution_mode: 0,
         });
 
         return Ok(());
@@ -327,6 +328,7 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
         transfer_amount: transfer_to_winner,
         protocol_fee,
         creator_fee,
+        resolution_mode: 0,
     });
 
     Ok(())
