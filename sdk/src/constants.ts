@@ -57,3 +57,17 @@ export { NATIVE_MINT } from "@solana/spl-token";
 
 /** Minimum market duration in seconds (matches on-chain constant) */
 export const MIN_MARKET_DURATION = 10;
+
+/** Metaplex Token Metadata program ID */
+export const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
+  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+);
+
+/** Curve scaling factor (10^9) — matches on-chain CURVE_SCALE */
+export const CURVE_SCALE = 1_000_000_000;
+
+/** Base sell fee in basis points (1%) — always applied */
+export const BASE_SELL_FEE_BPS = 100;
+
+/** Default emergency window in seconds (24 hours) */
+export const DEFAULT_EMERGENCY_WINDOW = 86_400;

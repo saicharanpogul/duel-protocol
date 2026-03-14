@@ -96,6 +96,29 @@ export function deriveMarketAccounts(creator: PublicKey, marketId: number | bigi
   };
 }
 
+/**
+ * Derive the ProgramConfig PDA.
+ */
+export function findConfigPda(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("config")],
+    PROGRAM_ID
+  );
+}
+
+/**
+ * Derive a Metaplex Token Metadata PDA.
+ */
+export function findMetadataPda(mint: PublicKey): [PublicKey, number] {
+  const TOKEN_METADATA_ID = new PublicKey(
+    "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+  );
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("metadata"), TOKEN_METADATA_ID.toBuffer(), mint.toBuffer()],
+    TOKEN_METADATA_ID
+  );
+}
+
 // ─── DAMM v2 PDA Helpers ───────────────────────────────────────────────
 
 import { METEORA_DAMM_V2_PROGRAM_ID, WSOL_MINT } from "./constants";

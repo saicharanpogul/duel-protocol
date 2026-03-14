@@ -1,5 +1,9 @@
-import { Buffer } from "buffer";
+/**
+ * Re-exports from the Duel Protocol SDK.
+ * This file bridges the example app with the SDK's PDA derivation utilities.
+ */
 import { PublicKey } from "@solana/web3.js";
+import { Buffer } from "buffer";
 
 export const PROGRAM_ID = new PublicKey(
   "CgR6V1AxC7exDFNoh3Q5JP9aea9YuPqq283EwACUGpZE"
@@ -9,7 +13,7 @@ export const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
   "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
 );
 
-export function findPda(seeds: (Buffer | Uint8Array)[]) {
+function findPda(seeds: (Buffer | Uint8Array)[]) {
   return PublicKey.findProgramAddressSync(seeds, PROGRAM_ID);
 }
 
@@ -74,15 +78,19 @@ export function deriveMarket(creator: PublicKey, marketId: number) {
     new Uint8Array([1]),
   ]);
   const [svA] = findPda([
-    Buffer.from("sol_vault"),
+    Buffer.from("quote_vault"),
     market.toBuffer(),
     new Uint8Array([0]),
   ]);
   const [svB] = findPda([
-    Buffer.from("sol_vault"),
+    Buffer.from("quote_vault"),
     market.toBuffer(),
     new Uint8Array([1]),
   ]);
+  const [config] = PublicKey.findProgramAddressSync(
+    [Buffer.from("config")],
+    PROGRAM_ID
+  );
 
-  return { market, sideA, sideB, mintA, mintB, tvA, tvB, svA, svB };
+  return { market, sideA, sideB, mintA, mintB, tvA, tvB, svA, svB, config };
 }
