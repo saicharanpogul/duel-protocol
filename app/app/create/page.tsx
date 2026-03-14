@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useConnection, useAnchorWallet } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
 import {
   PublicKey, SystemProgram, LAMPORTS_PER_SOL, ComputeBudgetProgram,
@@ -38,7 +38,7 @@ const IconBolt = () => (
 export default function CreatePage() {
   const router = useRouter();
   const { connection } = useConnection();
-  const wallet = useWallet();
+  const wallet = useAnchorWallet();
   const [step, setStep] = useState(1);
   const [txStatus, setTxStatus] = useState<string | null>(null);
 
@@ -54,11 +54,11 @@ export default function CreatePage() {
   const [twapWindowMin, setTwapWindowMin] = useState("60");
 
   async function handleCreate() {
-    if (!wallet.publicKey || !wallet.signTransaction) return;
+    if (!wallet) return;
     setTxStatus("Building transaction...");
 
     try {
-      const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
+      const provider = new AnchorProvider(connection, wallet, { commitment: "confirmed" });
       const program = getProgram(provider);
 
       const marketId = new BN(Date.now());
@@ -328,9 +328,9 @@ export default function CreatePage() {
               className="btn btn-accent"
               style={{ flex: 2 }}
               onClick={handleCreate}
-              disabled={!wallet.publicKey}
+              disabled={!wallet}
             >
-              {wallet.publicKey ? <><IconBolt /> Create Duel</> : "Connect Wallet First"}
+              {wallet ? <><IconBolt /> Create Duel</> : "Connect Wallet First"}
             </button>
           </div>
         </div>

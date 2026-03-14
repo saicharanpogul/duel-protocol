@@ -8,10 +8,11 @@
  *   SUPABASE_URL=... SUPABASE_SERVICE_KEY=... SOLANA_RPC_URL=... bun run scripts/indexer.ts
  */
 
-import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { BorshCoder, EventParser, Program, AnchorProvider } from "@coral-xyz/anchor";
+import { Connection, PublicKey, Keypair, Transaction, VersionedTransaction } from "@solana/web3.js";
+import { BorshCoder, EventParser, Program, AnchorProvider, Idl, type Wallet } from "@coral-xyz/anchor";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import IDL from "../sdk/idl/duel.json";
+import type { Duel } from "../sdk/src/types";
 
 // ─── Config ───────────────────────────────────────────────────────
 
@@ -37,12 +38,22 @@ const connection = new Connection(RPC_URL, {
 
 const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-const coder = new BorshCoder(IDL as any);
+const DUEL_IDL = IDL as Idl;
+const coder = new BorshCoder(DUEL_IDL);
 const eventParser = new EventParser(PROGRAM_ID, coder);
 
-function getProgram() {
-  const provider = new AnchorProvider(connection, {} as any, { commitment: "confirmed" });
-  return new Program(IDL as any, provider);
+/** Minimal wallet for readonly Anchor provider */
+const READONLY_KEYPAIR = Keypair.generate();
+const READONLY_WALLET: Wallet = {
+  payer: READONLY_KEYPAIR,
+  publicKey: READONLY_KEYPAIR.publicKey,
+  signTransaction: <T extends Transaction | VersionedTransaction>(tx: T) => Promise.resolve(tx),
+  signAllTransactions: <T extends Transaction | VersionedTransaction>(txs: T[]) => Promise.resolve(txs),
+};
+
+function getProgram(): Program<Duel> {
+  const provider = new AnchorProvider(connection, READONLY_WALLET, { commitment: "confirmed" });
+  return new Program(DUEL_IDL, provider) as unknown as Program<Duel>;
 }
 
 // ─── Supabase Writers ─────────────────────────────────────────────

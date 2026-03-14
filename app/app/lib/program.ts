@@ -1,24 +1,100 @@
-import { Program, AnchorProvider } from "@coral-xyz/anchor";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Program, AnchorProvider, Idl, type Wallet } from "@coral-xyz/anchor";
+import { Connection, PublicKey, Keypair, Transaction, VersionedTransaction } from "@solana/web3.js";
 import IDL from "./idl.json";
 
 export const PROGRAM_ID = new PublicKey("CgR6V1AxC7exDFNoh3Q5JP9aea9YuPqq283EwACUGpZE");
 export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "http://localhost:8999";
 
-export function getProgram(provider: AnchorProvider) {
-  return new Program(IDL as any, provider);
+/**
+ * ──────────────────────────────────────────────────
+ * Typed program — one cast at the boundary; everything
+ * downstream is properly typed.
+ * ──────────────────────────────────────────────────
+ */
+
+/** Minimal wallet for readonly operations — satisfies Anchor's Wallet interface */
+const READONLY_KEYPAIR = Keypair.generate();
+const READONLY_WALLET: Wallet = {
+  payer: READONLY_KEYPAIR,
+  publicKey: READONLY_KEYPAIR.publicKey,
+  signTransaction: <T extends Transaction | VersionedTransaction>(tx: T) => Promise.resolve(tx),
+  signAllTransactions: <T extends Transaction | VersionedTransaction>(txs: T[]) => Promise.resolve(txs),
+};
+
+/**
+ * Anchor's generic `Program<Idl>` doesn't expose named account namespaces.
+ * Instead of casting everywhere, we type the program once with a `DuelAccounts`
+ * interface that describes only what we actually use.
+ */
+interface AccountFetcher<T> {
+  fetch(address: PublicKey): Promise<T>;
+  all(): Promise<{ publicKey: PublicKey; account: T }[]>;
 }
 
-export function getReadonlyProgram() {
+export interface DuelProgram {
+  account: {
+    market: AccountFetcher<MarketAccount>;
+    side: AccountFetcher<SideAccount>;
+    programConfig: AccountFetcher<ProgramConfigAccount>;
+  };
+  methods: Program["methods"];
+  programId: PublicKey;
+}
+
+function createDuelProgram(provider: AnchorProvider): DuelProgram {
+  const program = new Program(IDL as Idl, provider);
+  // Single narrowing cast: everything returned is properly typed from here
+  return program as unknown as DuelProgram;
+}
+
+export function getProgram(provider: AnchorProvider): DuelProgram {
+  return createDuelProgram(provider);
+}
+
+export function getReadonlyProgram(): DuelProgram {
   const connection = new Connection(RPC_URL, "confirmed");
-  // Readonly provider (no wallet)
-  const provider = new AnchorProvider(connection, {} as any, {
+  const provider = new AnchorProvider(connection, READONLY_WALLET, {
     commitment: "confirmed",
   });
-  return new Program(IDL as any, provider);
+  return createDuelProgram(provider);
+}
+
+/* ─── Account Types ─── */
+
+export interface MarketAccount {
+  authority: PublicKey;
+  sideA: PublicKey;
+  sideB: PublicKey;
+  tokenMintA: PublicKey | null;
+  tokenMintB: PublicKey | null;
+  nameA: string;
+  nameB: string;
+  symbolA: string;
+  symbolB: string;
+  deadline: { toNumber(): number };
+  twapWindow: { toNumber(): number };
+  twapInterval: { toNumber(): number };
+  battleTaxBps: number;
+  protocolFeeBps: number;
+  sellPenaltyMaxBps: number;
+  twapSamplesCount: number;
+  winner: number | null;
+  status: { active?: object; resolved?: object };
+}
+
+export interface SideAccount {
+  tokenMint: PublicKey;
+  quoteReserveVault: PublicKey;
+  tokenReserveVault: PublicKey;
+  circulatingSupply: { toNumber(): number };
+}
+
+export interface ProgramConfigAccount {
+  protocolFeeAccount: PublicKey;
 }
 
 /* ─── PDA Derivations ─── */
+
 export function findMarketPda(creator: PublicKey, marketId: bigint): PublicKey {
   const buf = Buffer.alloc(8);
   buf.writeBigUInt64LE(BigInt(marketId));
@@ -72,7 +148,7 @@ export function findConfigPda(): PublicKey {
 /* ─── Market Status Helpers ─── */
 export type MarketStatus = "active" | "twap" | "resolved";
 
-export function getMarketStatus(market: any): MarketStatus {
+export function getMarketStatus(market: MarketAccount): MarketStatus {
   if (market.status?.resolved) return "resolved";
   const now = Date.now() / 1000;
   const twapStart = Number(market.deadline) - Number(market.twapWindow);

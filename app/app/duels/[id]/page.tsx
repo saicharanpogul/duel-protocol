@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useConnection, useWallet, useAnchorWallet } from "@solana/wallet-adapter-react";
 import { AnchorProvider } from "@coral-xyz/anchor";
 import {
   PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL,
@@ -16,6 +16,7 @@ import BN from "bn.js";
 import {
   getProgram, getReadonlyProgram, findConfigPda,
   formatSol, formatCountdown, getMarketStatus,
+  type MarketAccount, type SideAccount,
 } from "../../lib/program";
 import { supabase, hasSupabase } from "../../lib/supabase";
 
@@ -37,11 +38,12 @@ export default function MarketDetailPage() {
   const params = useParams();
   const marketPubkey = params.id as string;
   const { connection } = useConnection();
-  const wallet = useWallet();
+  const { publicKey } = useWallet();
+  const anchorWallet = useAnchorWallet();
 
-  const [market, setMarket] = useState<any>(null);
-  const [sideA, setSideA] = useState<any>(null);
-  const [sideB, setSideB] = useState<any>(null);
+  const [market, setMarket] = useState<MarketAccount | null>(null);
+  const [sideA, setSideA] = useState<SideAccount | null>(null);
+  const [sideB, setSideB] = useState<SideAccount | null>(null);
   const [reserveA, setReserveA] = useState(0);
   const [reserveB, setReserveB] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -72,14 +74,14 @@ export default function MarketDetailPage() {
         setReserveB(Number(vB.value.amount));
       } catch {}
 
-      if (wallet.publicKey) {
+      if (publicKey) {
         try {
-          const ataA = await getAssociatedTokenAddress(sA.tokenMint, wallet.publicKey);
+          const ataA = await getAssociatedTokenAddress(sA.tokenMint, publicKey);
           const accA = await getAccount(connection, ataA);
           setUserBalanceA(Number(accA.amount));
         } catch { setUserBalanceA(0); }
         try {
-          const ataB = await getAssociatedTokenAddress(sB.tokenMint, wallet.publicKey);
+          const ataB = await getAssociatedTokenAddress(sB.tokenMint, publicKey);
           const accB = await getAccount(connection, ataB);
           setUserBalanceB(Number(accB.amount));
         } catch { setUserBalanceB(0); }
@@ -88,7 +90,7 @@ export default function MarketDetailPage() {
       console.error("Fetch error:", err);
     }
     setLoading(false);
-  }, [marketPubkey, connection, wallet.publicKey]);
+  }, [marketPubkey, connection, publicKey]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -101,7 +103,7 @@ export default function MarketDetailPage() {
       .eq("market_pubkey", marketPubkey)
       .order("created_at", { ascending: false })
       .limit(20)
-      .then(({ data }) => { if (data) setTrades(data); });
+      .then(({ data }: { data: Record<string, unknown>[] | null }) => { if (data) setTrades(data); });
   }, [marketPubkey]);
 
   useEffect(() => {
@@ -113,39 +115,39 @@ export default function MarketDetailPage() {
   }, [market]);
 
   async function handleBuy() {
-    if (!wallet.publicKey || !wallet.signTransaction || !market || !sideA || !sideB) return;
+    if (!anchorWallet || !market || !sideA || !sideB) return;
     const solAmount = parseFloat(amount);
     if (isNaN(solAmount) || solAmount <= 0) return;
 
     setTxStatus("Preparing transaction...");
     try {
-      const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
+      const provider = new AnchorProvider(connection, anchorWallet, { commitment: "confirmed" });
       const program = getProgram(provider);
       const mk = new PublicKey(marketPubkey);
       const side = selectedSide === 0 ? sideA : sideB;
       const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
 
-      const wsolAta = await getAssociatedTokenAddress(NATIVE_MINT, wallet.publicKey);
+      const wsolAta = await getAssociatedTokenAddress(NATIVE_MINT, anchorWallet.publicKey);
       const tx = new Transaction();
 
       try { await getAccount(connection, wsolAta); } catch {
-        tx.add(createAssociatedTokenAccountInstruction(wallet.publicKey, wsolAta, wallet.publicKey, NATIVE_MINT));
+        tx.add(createAssociatedTokenAccountInstruction(anchorWallet.publicKey, wsolAta, anchorWallet.publicKey, NATIVE_MINT));
       }
       tx.add(
-        SystemProgram.transfer({ fromPubkey: wallet.publicKey, toPubkey: wsolAta, lamports }),
+        SystemProgram.transfer({ fromPubkey: anchorWallet.publicKey, toPubkey: wsolAta, lamports }),
         createSyncNativeInstruction(wsolAta)
       );
 
       const tokenMint = side.tokenMint;
-      const buyerAta = await getAssociatedTokenAddress(tokenMint, wallet.publicKey);
+      const buyerAta = await getAssociatedTokenAddress(tokenMint, anchorWallet.publicKey);
       try { await getAccount(connection, buyerAta); } catch {
-        tx.add(createAssociatedTokenAccountInstruction(wallet.publicKey, buyerAta, wallet.publicKey, tokenMint));
+        tx.add(createAssociatedTokenAccountInstruction(anchorWallet.publicKey, buyerAta, anchorWallet.publicKey, tokenMint));
       }
 
       const buyIx = await program.methods
         .buyTokens(selectedSide, new BN(lamports), new BN(1))
         .accounts({
-          buyer: wallet.publicKey,
+          buyer: anchorWallet.publicKey,
           market: mk,
           sideAccount: selectedSide === 0 ? market.sideA : market.sideB,
           tokenMint,
@@ -172,23 +174,23 @@ export default function MarketDetailPage() {
   }
 
   async function handleSell() {
-    if (!wallet.publicKey || !wallet.signTransaction || !market || !sideA || !sideB) return;
+    if (!anchorWallet || !market || !sideA || !sideB) return;
     const tokenAmt = parseFloat(amount);
     if (isNaN(tokenAmt) || tokenAmt <= 0) return;
 
     setTxStatus("Preparing sell...");
     try {
-      const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
+      const provider = new AnchorProvider(connection, anchorWallet, { commitment: "confirmed" });
       const program = getProgram(provider);
       const mk = new PublicKey(marketPubkey);
       const side = selectedSide === 0 ? sideA : sideB;
       const tokenMint = side.tokenMint;
-      const sellerAta = await getAssociatedTokenAddress(tokenMint, wallet.publicKey);
-      const wsolAta = await getAssociatedTokenAddress(NATIVE_MINT, wallet.publicKey);
+      const sellerAta = await getAssociatedTokenAddress(tokenMint, anchorWallet.publicKey);
+      const wsolAta = await getAssociatedTokenAddress(NATIVE_MINT, anchorWallet.publicKey);
 
       const tx = new Transaction();
       try { await getAccount(connection, wsolAta); } catch {
-        tx.add(createAssociatedTokenAccountInstruction(wallet.publicKey, wsolAta, wallet.publicKey, NATIVE_MINT));
+        tx.add(createAssociatedTokenAccountInstruction(anchorWallet.publicKey, wsolAta, anchorWallet.publicKey, NATIVE_MINT));
       }
 
       const status = getMarketStatus(market);
@@ -199,7 +201,7 @@ export default function MarketDetailPage() {
         sellIx = await program.methods
           .sellPostResolution(selectedSide, sellAmount, new BN(0))
           .accounts({
-            seller: wallet.publicKey,
+            seller: anchorWallet.publicKey,
             market: mk,
             sideAccount: selectedSide === 0 ? market.sideA : market.sideB,
             tokenMint,
@@ -217,7 +219,7 @@ export default function MarketDetailPage() {
         sellIx = await program.methods
           .sellTokens(selectedSide, sellAmount, new BN(1))
           .accounts({
-            seller: wallet.publicKey,
+            seller: anchorWallet.publicKey,
             market: mk,
             sideAccount: selectedSide === 0 ? market.sideA : market.sideB,
             tokenMint,
@@ -387,7 +389,7 @@ export default function MarketDetailPage() {
         </div>
 
         {/* User balance */}
-        {wallet.publicKey && (
+        {publicKey && (
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, fontSize: "0.8rem", color: "var(--text-secondary)" }}>
             <span>Your {selectedSide === 0 ? market.symbolA : market.symbolB} tokens:</span>
             <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>
@@ -424,7 +426,7 @@ export default function MarketDetailPage() {
           <button
             className={`btn ${selectedSide === 0 ? "btn-yellow" : "btn-blue"}`}
             onClick={handleBuy}
-            disabled={!wallet.publicKey || status === "resolved"}
+            disabled={!anchorWallet || status === "resolved"}
             style={{ width: "100%" }}
           >
             Buy {selectedSide === 0 ? market.symbolA : market.symbolB}
@@ -432,7 +434,7 @@ export default function MarketDetailPage() {
           <button
             className="btn btn-ghost"
             onClick={handleSell}
-            disabled={!wallet.publicKey}
+            disabled={!anchorWallet}
             style={{ width: "100%" }}
           >
             Sell
@@ -450,7 +452,7 @@ export default function MarketDetailPage() {
           </div>
         )}
 
-        {!wallet.publicKey && (
+        {!publicKey && (
           <p style={{ textAlign: "center", marginTop: 16, fontSize: "0.8rem", color: "var(--text-muted)" }}>
             Connect wallet to trade
           </p>

@@ -17,12 +17,12 @@
  */
 
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
-import { AnchorProvider, Program, Wallet, BN } from "@coral-xyz/anchor";
+import { AnchorProvider, Program, Wallet, BN, Idl } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, NATIVE_MINT } from "@solana/spl-token";
 import { readFileSync } from "fs";
 import { homedir } from "os";
 import { resolve } from "path";
-import { Duel } from "../target/types/duel";
+import type { Duel } from "../sdk/src/types";
 import IDL from "../sdk/idl/duel.json";
 
 // ─── Config ────────────────────────────────────────────────────────────
@@ -264,7 +264,7 @@ async function main() {
   const provider = new AnchorProvider(connection, wallet, {
     commitment: "confirmed",
   });
-  const program = new Program(IDL as any, provider) as unknown as Program<Duel>;
+  const program = new Program(IDL as Idl, provider) as unknown as Program<Duel>;
 
   log("INFO", "Duel Protocol TWAP Cranker started", {
     rpc: RPC_URL,
