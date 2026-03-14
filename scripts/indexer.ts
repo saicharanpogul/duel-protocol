@@ -195,11 +195,14 @@ async function syncSingleMarket(marketPubkey: PublicKey) {
     const market = await program.account.market.fetch(marketPubkey);
 
     let reserveA = 0, reserveB = 0, circulatingA = 0, circulatingB = 0;
+    let tokenMintA: string | null = null, tokenMintB: string | null = null;
     try {
       const sideA = await program.account.side.fetch(market.sideA);
       const sideB = await program.account.side.fetch(market.sideB);
       circulatingA = sideA.circulatingSupply.toNumber();
       circulatingB = sideB.circulatingSupply.toNumber();
+      tokenMintA = sideA.tokenMint.toBase58();
+      tokenMintB = sideB.tokenMint.toBase58();
 
       const vA = await connection.getTokenAccountBalance(sideA.quoteReserveVault);
       const vB = await connection.getTokenAccountBalance(sideB.quoteReserveVault);
@@ -210,10 +213,6 @@ async function syncSingleMarket(marketPubkey: PublicKey) {
     await upsertMarket({
       pubkey: marketPubkey.toBase58(),
       authority: market.authority.toBase58(),
-      name_a: market.nameA,
-      name_b: market.nameB,
-      symbol_a: market.symbolA,
-      symbol_b: market.symbolB,
       deadline: Number(market.deadline),
       battle_tax_bps: market.battleTaxBps,
       protocol_fee_bps: market.protocolFeeBps,
@@ -226,13 +225,14 @@ async function syncSingleMarket(marketPubkey: PublicKey) {
       reserve_b: reserveB,
       side_a_pubkey: market.sideA.toBase58(),
       side_b_pubkey: market.sideB.toBase58(),
-      token_mint_a: market.tokenMintA?.toBase58() || null,
-      token_mint_b: market.tokenMintB?.toBase58() || null,
+      token_mint_a: tokenMintA,
+      token_mint_b: tokenMintB,
       circulating_a: circulatingA,
       circulating_b: circulatingB,
     });
-  } catch (err: any) {
-    console.error(`[Sync] Failed to sync market ${marketPubkey.toBase58().slice(0, 8)}...:`, err.message);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[Sync] Failed to sync market ${marketPubkey.toBase58().slice(0, 8)}...:`, message);
   }
 }
 
