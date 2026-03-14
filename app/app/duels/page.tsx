@@ -19,6 +19,20 @@ type MarketData = {
   battleTaxBps: number;
 };
 
+/* ─── SVG Icons ─── */
+const IconBolt = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+);
+const IconBarChart = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+);
+const IconFlag = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+);
+const IconTrophy = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+);
+
 export default function DuelsPage() {
   const [markets, setMarkets] = useState<MarketData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,7 +97,7 @@ export default function DuelsPage() {
   return (
     <div className="page-container">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
-        <h1 className="section-title" style={{ margin: 0 }}>⚔️ Active Duels</h1>
+        <h1 className="section-title" style={{ margin: 0 }}>Active Duels</h1>
         <div style={{ display: "flex", gap: 8 }}>
           {(["all", "active", "resolved"] as const).map((f) => (
             <button
@@ -105,7 +119,9 @@ export default function DuelsPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: "80px 0" }}>
-          <div style={{ fontSize: "3rem", marginBottom: 16 }}>🏜️</div>
+          <div style={{ fontSize: "3rem", marginBottom: 16, opacity: 0.3 }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><line x1="8" y1="15" x2="16" y2="15"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          </div>
           <h2 style={{ fontFamily: "var(--font-heading)", marginBottom: 8 }}>No duels yet</h2>
           <p style={{ color: "var(--text-secondary)", marginBottom: 24 }}>Be the first to create a duel and choose your side.</p>
           <Link href="/create" className="btn btn-accent">Create a Duel</Link>
@@ -125,7 +141,7 @@ export default function DuelsPage() {
                   m.status === "active" ? "pill-badge-active" :
                   m.status === "twap" ? "pill-badge-twap" : "pill-badge-resolved"
                 }`}>
-                  {m.status === "active" ? "⚡ Live" : m.status === "twap" ? "📊 TWAP" : "🏁 Resolved"}
+                  {m.status === "active" ? <><IconBolt /> Live</> : m.status === "twap" ? <><IconBarChart /> TWAP</> : <><IconFlag /> Resolved</>}
                 </span>
                 <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                   {formatCountdown(m.deadline)}
@@ -134,19 +150,19 @@ export default function DuelsPage() {
 
               {/* VS Title */}
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                <span style={{ color: "var(--text-red)", fontWeight: 700, fontSize: "1.1rem", flex: 1, textAlign: "center" }}>
-                  🔴 {m.nameA}
+                <span style={{ color: "var(--text-yellow)", fontWeight: 700, fontSize: "1.1rem", flex: 1, textAlign: "center" }}>
+                  {m.nameA}
                 </span>
-                <span style={{ color: "var(--text-muted)", fontWeight: 800, fontSize: "0.8rem" }}>VS</span>
+                <span style={{ color: "var(--text-muted)", fontWeight: 800, fontSize: "0.75rem", letterSpacing: "0.08em" }}>VS</span>
                 <span style={{ color: "var(--text-blue)", fontWeight: 700, fontSize: "1.1rem", flex: 1, textAlign: "center" }}>
-                  🔵 {m.nameB}
+                  {m.nameB}
                 </span>
               </div>
 
               {/* Sentiment Bar */}
               <div className="sentiment-bar" style={{ marginBottom: 12 }}>
                 <div
-                  className="sentiment-bar-red"
+                  className="sentiment-bar-yellow"
                   style={{ width: `${m.reserveA + m.reserveB > 0 ? (m.reserveA / (m.reserveA + m.reserveB)) * 100 : 50}%` }}
                 />
                 <div
@@ -158,7 +174,7 @@ export default function DuelsPage() {
               {/* Reserve Info */}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
                 <span>{formatSol(m.reserveA)} SOL</span>
-                <span style={{ color: "var(--text-muted)" }}>Battle Tax: {m.battleTaxBps / 100}%</span>
+                <span style={{ color: "var(--text-muted)" }}>Tax: {m.battleTaxBps / 100}%</span>
                 <span>{formatSol(m.reserveB)} SOL</span>
               </div>
 
@@ -169,14 +185,19 @@ export default function DuelsPage() {
                   padding: "8px 12px",
                   borderRadius: "var(--radius-md)",
                   background: m.winner === 0
-                    ? "rgba(255, 45, 85, 0.1)"
-                    : "rgba(0, 122, 255, 0.1)",
+                    ? "rgba(251, 191, 36, 0.08)"
+                    : "rgba(59, 130, 246, 0.08)",
                   textAlign: "center",
                   fontSize: "0.85rem",
                   fontWeight: 600,
-                  color: m.winner === 0 ? "var(--text-red)" : "var(--text-blue)",
+                  color: m.winner === 0 ? "var(--text-yellow)" : "var(--text-blue)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
                 }}>
-                  {m.winner === 0 ? `🔴 ${m.nameA} Wins!` : `🔵 ${m.nameB} Wins!`}
+                  <IconTrophy />
+                  {m.winner === 0 ? `${m.nameA} Wins` : `${m.nameB} Wins`}
                 </div>
               )}
             </Link>

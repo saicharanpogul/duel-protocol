@@ -8,34 +8,66 @@ const FAQ_ITEMS = [
   {
     question: "What is a Duel?",
     answer:
-      "A Duel is a binary outcome market where two sides compete — Red Pill vs Blue Pill. Each side has its own bonding curve token. Buy tokens on the side you believe in, and the market resolves via TWAP (Time-Weighted Average Price).",
+      "A Duel is a binary outcome market where two sides compete. Each side has its own bonding curve token. Buy tokens on the side you believe in, and the market resolves via TWAP (Time-Weighted Average Price) — fully on-chain, no oracles.",
   },
   {
     question: "How does TWAP resolution work?",
     answer:
-      "Instead of relying on an oracle, the winning side is determined by which token maintained a higher time-weighted average price during the observation window. This makes resolution manipulation-resistant and fully on-chain.",
+      "During the final observation window, the protocol samples prices at fixed intervals on-chain. The side with the higher time-weighted average price wins. This is manipulation-resistant — no single trade can swing the outcome.",
   },
   {
     question: "What are bonding curves?",
     answer:
-      "Bonding curves provide instant, algorithmic pricing. When you buy tokens, the price increases. When you sell, the price decreases. Early believers get better rates. No AMM liquidity pools needed.",
+      "Bonding curves provide instant, algorithmic pricing. When you buy tokens, the price increases. When you sell, it decreases. Early believers get better rates. No AMM pools or liquidity providers needed.",
   },
   {
     question: "What is the Battle Tax?",
     answer:
-      "The Battle Tax is a configurable fee (up to 50%) that redistributes from the losing side's liquidity to the winning side upon resolution. It's the core incentive mechanism that makes duels zero-sum and exciting.",
+      "The Battle Tax (up to 50%) redistributes from the losing side's reserve to the winning side on resolution. It's the core incentive that makes duels competitive — winners take from losers.",
   },
   {
-    question: "What happens after a duel resolves?",
+    question: "What happens after resolution?",
     answer:
-      "The winning side's token can graduate to Meteora DLMM (a Solana DEX), creating permanent on-chain liquidity. Winning token holders can sell on the DEX or hold for continued price discovery.",
+      "Winners sell at an inflated curve (fatter from battle tax). The winning token can also graduate to Meteora DAMM v2, creating a permanent DEX pool that Jupiter routes through automatically.",
   },
   {
-    question: "What quote tokens are supported?",
+    question: "What tokens are supported?",
     answer:
-      "Currently SOL (wrapped SOL) is the primary quote token. The protocol is designed to support any SPL token including USDC and Token-2022 assets via the quoteTokenProgram interface.",
+      "SOL (wrapped SOL) is the primary quote token. The protocol supports any SPL token including USDC and Token-2022 assets via the quoteTokenProgram interface.",
   },
 ];
+
+/* ─── Inline SVG Icons (solanafunded style) ─── */
+const IconBolt = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+);
+const IconTarget = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+);
+const IconTrendingUp = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+);
+const IconClock = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+);
+const IconShield = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+);
+const IconDiamond = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z"/></svg>
+);
+const IconLock = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+);
+const IconZap = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+);
+const IconChevronDown = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+);
+const IconArrowRight = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+);
 
 export default function LandingPage() {
   const [mounted, setMounted] = useState(false);
@@ -45,70 +77,47 @@ export default function LandingPage() {
 
   return (
     <div className={styles.landing}>
-      {/* ─── Hero Section ─── */}
+      {/* ─── Hero ─── */}
       <section className={styles.hero}>
         <div className={styles.heroMesh} />
-        <div className={styles.heroGrid} />
 
-        <div
-          className={`${styles.heroContent} ${mounted ? "animate-fadeInUp" : ""}`}
-        >
+        <div className={mounted ? "animate-fadeInUp" : ""} style={{ opacity: mounted ? 1 : 0 }}>
           <div className={styles.heroBadge}>
             <span className={styles.heroBadgeDot} />
             Live on Solana Devnet
           </div>
 
           <h1 className={styles.heroTitle}>
-            Choose Your{" "}
-            <span className={styles.heroTitleRed}>Side</span>.
+            Choose your{" "}
+            <span className={styles.heroTitleYellow}>side</span>.
             <br />
-            Win The <span className={styles.heroTitleBlue}>Duel</span>.
+            Win the <span className={styles.heroTitleBlue}>duel</span>.
           </h1>
 
           <p className={styles.heroSub}>
             Subjective prediction markets powered by bonding curves and
-            TWAP&nbsp;resolution. No oracles. Pure market&nbsp;consensus.
+            TWAP&nbsp;resolution. No oracles. No liquidity providers.
+            Pure&nbsp;market&nbsp;consensus.
           </p>
 
           <div className={styles.heroActions}>
-            <Link href="/duels" className="btn btn-red btn-lg">
-              🔴 Enter The Arena
+            <Link href="/duels" className="btn btn-yellow btn-lg">
+              Enter The Arena <IconArrowRight />
             </Link>
-            <Link href="/create" className="btn btn-blue btn-lg">
-              🔵 Create a Duel
+            <Link href="/create" className="btn btn-ghost btn-lg">
+              Create a Duel <IconArrowRight />
             </Link>
-          </div>
-        </div>
-
-        {/* ─── Pill Visualization ─── */}
-        <div
-          className={`${styles.pillContainer} ${mounted ? "animate-fadeInUp animate-delay-2" : ""}`}
-        >
-          <div className={styles.pillRed}>
-            <div className={styles.pillInner}>
-              <span className={styles.pillEmoji}>🔴</span>
-              <span className={styles.pillLabel}>RED PILL</span>
-              <span className={styles.pillDesc}>Conviction</span>
-            </div>
-          </div>
-          <div className={styles.pillVs}>VS</div>
-          <div className={styles.pillBlue}>
-            <div className={styles.pillInner}>
-              <span className={styles.pillEmoji}>🔵</span>
-              <span className={styles.pillLabel}>BLUE PILL</span>
-              <span className={styles.pillDesc}>Contrarian</span>
-            </div>
           </div>
         </div>
       </section>
 
       {/* ─── Stats Bar ─── */}
       <section
-        className={`${styles.statsBar} ${mounted ? "animate-fadeInUp animate-delay-3" : ""}`}
+        className={`${styles.statsBar} ${mounted ? "animate-fadeInUp animate-delay-2" : ""}`}
       >
         <div className={styles.statItem}>
-          <div className={styles.statValue}>∞</div>
-          <div className={styles.statLabel}>Active Duels</div>
+          <div className={styles.statValue}>18</div>
+          <div className={styles.statLabel}>Instructions</div>
         </div>
         <div className={styles.statItem}>
           <div className={styles.statValue}>TWAP</div>
@@ -126,15 +135,13 @@ export default function LandingPage() {
 
       {/* ─── How It Works ─── */}
       <section className={styles.sectionWrapper}>
-        <div className={styles.sectionBadge}>🎯 How it works?</div>
+        <div className={styles.sectionBadge}>How it works</div>
         <h2 className={styles.sectionTitle}>
-          From creation to resolution
-          <br />
-          in four steps
+          From creation to resolution in four steps
         </h2>
         <p className={styles.sectionSub}>
-          Each duel follows a transparent lifecycle. No hidden mechanics, no
-          centralized control.
+          Each duel follows a transparent lifecycle. No hidden mechanics,
+          no centralized control.
         </p>
 
         <div className={styles.stepsGrid}>
@@ -145,9 +152,8 @@ export default function LandingPage() {
               <span className={styles.stepBadge}>Entry</span>
             </div>
             <p className={styles.stepDescription}>
-              Every duel has two sides — Red Pill vs Blue Pill. Buy tokens on
-              the side you believe in using SOL. The bonding curve sets the
-              price automatically.
+              Every duel has two sides. Buy tokens on the side you believe
+              in using SOL. The bonding curve sets the price.
             </p>
           </div>
 
@@ -158,9 +164,9 @@ export default function LandingPage() {
               <span className={styles.stepBadge}>Trading</span>
             </div>
             <p className={styles.stepDescription}>
-              Bonding curves ensure fair, algorithmic pricing. Early believers
-              get better rates. Buy and sell freely before the deadline — no
-              liquidity pools needed.
+              Bonding curves ensure fair, algorithmic pricing. Early
+              believers get better rates. Buy and sell freely before
+              the deadline.
             </p>
           </div>
 
@@ -171,9 +177,8 @@ export default function LandingPage() {
               <span className={styles.stepBadge}>Settlement</span>
             </div>
             <p className={styles.stepDescription}>
-              Time-weighted average price determines the winner. Observation
-              samples are recorded on-chain during the TWAP window. No oracles
-              — pure market consensus.
+              Time-weighted average price determines the winner.
+              Observation samples are recorded on-chain. No oracles.
             </p>
           </div>
 
@@ -184,9 +189,8 @@ export default function LandingPage() {
               <span className={styles.stepBadge}>DEX</span>
             </div>
             <p className={styles.stepDescription}>
-              The winning side graduates to Meteora DLMM, creating permanent
-              DEX liquidity. Battle tax flows from losers to winners. Hold or
-              trade on the open market.
+              The winning token graduates to Meteora DAMM v2, creating
+              permanent DEX liquidity. Tradeable on Jupiter instantly.
             </p>
           </div>
         </div>
@@ -194,65 +198,65 @@ export default function LandingPage() {
 
       {/* ─── Features ─── */}
       <section className={styles.sectionWrapper}>
-        <div className={styles.sectionBadge}>⚡ Built for Solana</div>
+        <div className={styles.sectionBadge}>Built for Solana</div>
         <h2 className={styles.sectionTitle}>Protocol primitives</h2>
         <p className={styles.sectionSub}>
-          Every component is designed from first principles for composability,
+          Every component designed from first principles for composability,
           security, and performance.
         </p>
 
         <div className={styles.featuresGrid}>
           <div className={styles.featureCard}>
-            <span className={styles.featureIcon}>📈</span>
+            <span className={styles.featureIcon}><IconTrendingUp /></span>
             <div className={styles.featureTitle}>Bonding Curves</div>
             <p className={styles.featureDesc}>
-              Algorithmic pricing with configurable parameters. Instant
-              liquidity, no AMM setup required.
+              Algorithmic pricing with configurable steepness, exponent,
+              and base price. Instant liquidity with no AMM setup.
             </p>
           </div>
 
           <div className={styles.featureCard}>
-            <span className={styles.featureIcon}>⏱️</span>
+            <span className={styles.featureIcon}><IconClock /></span>
             <div className={styles.featureTitle}>TWAP Oracle</div>
             <p className={styles.featureDesc}>
-              On-chain time-weighted average price with clamping,
-              manipulation-resistant by design.
+              On-chain time-weighted average with lagging filter and
+              observation clamping. Manipulation-resistant by design.
             </p>
           </div>
 
           <div className={styles.featureCard}>
-            <span className={styles.featureIcon}>🔒</span>
+            <span className={styles.featureIcon}><IconLock /></span>
             <div className={styles.featureTitle}>Re-entrancy Guards</div>
             <p className={styles.featureDesc}>
-              Market-level lock prevents flash loan attacks and re-entrancy
-              exploits during trades.
+              Market-level lock prevents flash loan attacks during
+              buy/sell operations. Active on every trade.
             </p>
           </div>
 
           <div className={styles.featureCard}>
-            <span className={styles.featureIcon}>💎</span>
+            <span className={styles.featureIcon}><IconDiamond /></span>
             <div className={styles.featureTitle}>DEX Graduation</div>
             <p className={styles.featureDesc}>
-              Winners graduate to Meteora DLMM with automated position
-              creation and liquidity bootstrapping.
+              Winners graduate to Meteora DAMM v2 via CPI. Automated pool
+              creation with integer-only sqrt pricing.
             </p>
           </div>
 
           <div className={styles.featureCard}>
-            <span className={styles.featureIcon}>🛡️</span>
+            <span className={styles.featureIcon}><IconShield /></span>
             <div className={styles.featureTitle}>Sell Penalty</div>
             <p className={styles.featureDesc}>
-              Dynamic penalty near deadline prevents last-second dumps.
-              Accumulated penalties boost winner rewards.
+              Dynamic quadratic penalty near deadline prevents last-second
+              dumps. Penalties boost winner rewards.
             </p>
           </div>
 
           <div className={styles.featureCard}>
-            <span className={styles.featureIcon}>🪙</span>
-            <div className={styles.featureTitle}>Token-2022 Ready</div>
+            <span className={styles.featureIcon}><IconZap /></span>
+            <div className={styles.featureTitle}>Permissionless</div>
             <p className={styles.featureDesc}>
-              Full TokenInterface support for both classic SPL tokens and
-              Token-2022 extensions.
+              Anyone can create markets, crank TWAP samples, resolve
+              outcomes, and graduate tokens. No gatekeepers.
             </p>
           </div>
         </div>
@@ -260,7 +264,7 @@ export default function LandingPage() {
 
       {/* ─── FAQ ─── */}
       <section className={styles.sectionWrapper}>
-        <div className={styles.sectionBadge}>❓ FAQ</div>
+        <div className={styles.sectionBadge}>FAQ</div>
         <h2 className={styles.sectionTitle}>Frequently asked questions</h2>
         <p className={styles.sectionSub}>
           Everything you need to know about Duel Protocol.
@@ -277,7 +281,7 @@ export default function LandingPage() {
                 <span
                   className={`${styles.faqChevron} ${openFaq === i ? styles.faqChevronOpen : ""}`}
                 >
-                  ▾
+                  <IconChevronDown />
                 </span>
               </button>
               {openFaq === i && (
@@ -291,17 +295,17 @@ export default function LandingPage() {
       {/* ─── CTA ─── */}
       <section className={styles.ctaSection}>
         <h2 className={styles.ctaTitle}>
-          Ready to enter the <span className={styles.heroTitleRed}>arena</span>?
+          Ready to enter the <span className={styles.heroTitleYellow}>arena</span>?
         </h2>
         <p className={styles.ctaSub}>
           Create a duel or pick your side. Markets settle on-chain.
         </p>
         <div className={styles.ctaActions}>
-          <Link href="/duels" className="btn btn-red btn-lg">
-            Browse Duels
+          <Link href="/duels" className="btn btn-yellow btn-lg">
+            Browse Duels <IconArrowRight />
           </Link>
           <Link href="/create" className="btn btn-ghost btn-lg">
-            Create a Duel →
+            Create a Duel <IconArrowRight />
           </Link>
         </div>
       </section>
@@ -310,7 +314,7 @@ export default function LandingPage() {
       <footer className={styles.footer}>
         <div className={styles.footerGrid}>
           <div>
-            <div className={styles.footerBrand}>⚡ DUELS</div>
+            <div className={styles.footerBrand}>DUELS</div>
             <p className={styles.footerBrandDesc}>
               Subjective prediction markets with bonding curves and TWAP
               resolution. Built on Solana.
@@ -320,45 +324,27 @@ export default function LandingPage() {
           <div>
             <div className={styles.footerColTitle}>Protocol</div>
             <ul className={styles.footerLinks}>
-              <li>
-                <Link href="/duels">Browse Duels</Link>
-              </li>
-              <li>
-                <Link href="/create">Create</Link>
-              </li>
-              <li>
-                <a href="#">Documentation</a>
-              </li>
+              <li><Link href="/duels">Browse Duels</Link></li>
+              <li><Link href="/create">Create</Link></li>
+              <li><a href="https://github.com/saicharanpogul/duel-protocol" target="_blank" rel="noopener noreferrer">Documentation</a></li>
             </ul>
           </div>
 
           <div>
-            <div className={styles.footerColTitle}>Resources</div>
+            <div className={styles.footerColTitle}>Developers</div>
             <ul className={styles.footerLinks}>
-              <li>
-                <a href="#">SDK</a>
-              </li>
-              <li>
-                <a href="#">GitHub</a>
-              </li>
-              <li>
-                <a href="#">Bug Bounty</a>
-              </li>
+              <li><a href="https://github.com/saicharanpogul/duel-protocol" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+              <li><a href="https://www.npmjs.com/package/@duel-protocol/sdk" target="_blank" rel="noopener noreferrer">SDK</a></li>
+              <li><a href="https://github.com/saicharanpogul/duel-protocol/blob/main/docs/THESIS.md" target="_blank" rel="noopener noreferrer">Thesis</a></li>
             </ul>
           </div>
 
           <div>
             <div className={styles.footerColTitle}>Community</div>
             <ul className={styles.footerLinks}>
-              <li>
-                <a href="#">Twitter</a>
-              </li>
-              <li>
-                <a href="#">Discord</a>
-              </li>
-              <li>
-                <a href="#">Telegram</a>
-              </li>
+              <li><a href="#">Twitter</a></li>
+              <li><a href="#">Discord</a></li>
+              <li><a href="#">Telegram</a></li>
             </ul>
           </div>
         </div>
@@ -369,8 +355,7 @@ export default function LandingPage() {
           </span>
           <div className={styles.footerSocials}>
             <a href="#">𝕏</a>
-            <a href="#">Discord</a>
-            <a href="#">GitHub</a>
+            <a href="https://github.com/saicharanpogul/duel-protocol" target="_blank" rel="noopener noreferrer">GitHub</a>
           </div>
         </div>
       </footer>

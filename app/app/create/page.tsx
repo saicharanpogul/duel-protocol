@@ -24,6 +24,17 @@ function findMetadataPda(mint: PublicKey): PublicKey {
   return pda;
 }
 
+/* ─── SVG Icons ─── */
+const IconArrowLeft = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+);
+const IconArrowRight = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+);
+const IconBolt = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+);
+
 export default function CreatePage() {
   const router = useRouter();
   const { connection } = useConnection();
@@ -54,7 +65,6 @@ export default function CreatePage() {
       const idBuf = Buffer.alloc(8);
       idBuf.writeBigUInt64LE(BigInt(marketId.toNumber()));
 
-      // Derive all PDAs
       const [market] = PublicKey.findProgramAddressSync(
         [Buffer.from("market"), wallet.publicKey.toBuffer(), idBuf], PROGRAM_ID
       );
@@ -83,15 +93,11 @@ export default function CreatePage() {
         [Buffer.from("quote_vault"), market.toBuffer(), Buffer.from([1])], PROGRAM_ID
       );
 
-      // Protocol fee account
       const configData = await program.account.programConfig.fetch(findConfigPda());
       const protocolFeeAccount = configData.protocolFeeAccount;
 
-      // Creator fee (WSOL ATA)
       const creatorFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, wallet.publicKey);
-      try { await getAccount(connection, creatorFeeAccount); } catch {
-        // Will create in pre-instructions
-      }
+      try { await getAccount(connection, creatorFeeAccount); } catch {}
 
       const now = Math.floor(Date.now() / 1000);
       const deadline = now + Math.floor(parseFloat(deadlineHours) * 3600);
@@ -105,22 +111,22 @@ export default function CreatePage() {
           marketId,
           new BN(deadline),
           new BN(twapWindow),
-          new BN(60), // twap interval
+          new BN(60),
           battleTaxBps,
-          100, // protocol fee 1%
-          1500, // sell penalty max 15%
-          new BN(Math.floor(twapWindow * 0.5)), // protection offset
-          { a: new BN(1_000_000), n: 1, b: new BN(1_000) }, // curve params
-          new BN(1_000_000_000), // total supply
+          100,
+          1500,
+          new BN(Math.floor(twapWindow * 0.5)),
+          { a: new BN(1_000_000), n: 1, b: new BN(1_000) },
+          new BN(1_000_000_000),
           nameA, symbolA, "",
           nameB, symbolB, "",
-          { unlocked: {} }, // lp lock mode
-          new BN(0), // max observation change
-          0, // min twap spread
-          0, // creator fee
-          { twap: {} }, // resolution mode
-          PublicKey.default, // oracle authority
-          new BN(0), // oracle dispute window
+          { unlocked: {} },
+          new BN(0),
+          0,
+          0,
+          { twap: {} },
+          PublicKey.default,
+          new BN(0),
         )
         .accounts({
           creator: wallet.publicKey, market, sideA, sideB,
@@ -142,17 +148,17 @@ export default function CreatePage() {
         .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
         .rpc();
 
-      setTxStatus(`✅ Market created! Tx: ${tx.slice(0, 8)}...`);
+      setTxStatus(`Market created — ${tx.slice(0, 8)}...`);
       setTimeout(() => router.push(`/duels/${market.toBase58()}`), 2000);
     } catch (err: any) {
       console.error(err);
-      setTxStatus(`❌ ${err.message?.slice(0, 100)}`);
+      setTxStatus(`Failed — ${err.message?.slice(0, 100)}`);
     }
   }
 
   return (
     <div className="page-container" style={{ maxWidth: 600, margin: "0 auto", padding: "40px 24px" }}>
-      <h1 className="section-title" style={{ textAlign: "center", marginBottom: 8 }}>⚔️ Create a Duel</h1>
+      <h1 className="section-title" style={{ textAlign: "center", marginBottom: 8 }}>Create a Duel</h1>
       <p style={{ textAlign: "center", color: "var(--text-secondary)", marginBottom: 40, fontSize: "0.9rem" }}>
         Define two sides, set the rules, and let the market decide.
       </p>
@@ -184,9 +190,9 @@ export default function CreatePage() {
             <div>
               <div style={{
                 padding: "16px", borderRadius: "var(--radius-md)", marginBottom: 12,
-                background: "rgba(255, 45, 85, 0.05)", border: "1px solid rgba(255, 45, 85, 0.2)",
+                background: "rgba(251, 191, 36, 0.05)", border: "1px solid rgba(251, 191, 36, 0.15)",
               }}>
-                <span style={{ color: "var(--text-red)", fontWeight: 700, fontSize: "0.85rem" }}>🔴 RED PILL</span>
+                <span style={{ color: "var(--text-yellow)", fontWeight: 700, fontSize: "0.85rem" }}>SIDE A</span>
               </div>
               <input className="input" placeholder="Side A Name" value={nameA} onChange={(e) => setNameA(e.target.value)} style={{ marginBottom: 8 }} />
               <input className="input" placeholder="Symbol (e.g. BULL)" value={symbolA} onChange={(e) => setSymbolA(e.target.value.toUpperCase())} />
@@ -194,9 +200,9 @@ export default function CreatePage() {
             <div>
               <div style={{
                 padding: "16px", borderRadius: "var(--radius-md)", marginBottom: 12,
-                background: "rgba(0, 122, 255, 0.05)", border: "1px solid rgba(0, 122, 255, 0.2)",
+                background: "rgba(59, 130, 246, 0.05)", border: "1px solid rgba(59, 130, 246, 0.15)",
               }}>
-                <span style={{ color: "var(--text-blue)", fontWeight: 700, fontSize: "0.85rem" }}>🔵 BLUE PILL</span>
+                <span style={{ color: "var(--text-blue)", fontWeight: 700, fontSize: "0.85rem" }}>SIDE B</span>
               </div>
               <input className="input" placeholder="Side B Name" value={nameB} onChange={(e) => setNameB(e.target.value)} style={{ marginBottom: 8 }} />
               <input className="input" placeholder="Symbol (e.g. BEAR)" value={symbolB} onChange={(e) => setSymbolB(e.target.value.toUpperCase())} />
@@ -209,7 +215,7 @@ export default function CreatePage() {
             onClick={() => setStep(2)}
             disabled={!nameA || !symbolA || !nameB || !symbolB}
           >
-            Next →
+            Next <IconArrowRight />
           </button>
         </div>
       )}
@@ -243,8 +249,8 @@ export default function CreatePage() {
           </div>
 
           <div style={{ display: "flex", gap: 12 }}>
-            <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setStep(1)}>← Back</button>
-            <button className="btn btn-accent" style={{ flex: 2 }} onClick={() => setStep(3)}>Review →</button>
+            <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setStep(1)}><IconArrowLeft /> Back</button>
+            <button className="btn btn-accent" style={{ flex: 2 }} onClick={() => setStep(3)}>Review <IconArrowRight /></button>
           </div>
         </div>
       )}
@@ -262,13 +268,25 @@ export default function CreatePage() {
             background: "var(--bg-surface-2)", borderRadius: "var(--radius-md)",
           }}>
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "1.5rem", marginBottom: 4 }}>🔴</div>
-              <div style={{ fontWeight: 700, color: "var(--text-red)" }}>{nameA}</div>
+              <div style={{
+                width: 36, height: 36, borderRadius: "50%", display: "inline-flex",
+                alignItems: "center", justifyContent: "center", marginBottom: 8,
+                background: "rgba(251, 191, 36, 0.1)", border: "1px solid rgba(251, 191, 36, 0.2)",
+              }}>
+                <span style={{ fontFamily: "var(--font-heading)", fontWeight: 900, color: "var(--text-yellow)", fontSize: "0.85rem" }}>A</span>
+              </div>
+              <div style={{ fontWeight: 700, color: "var(--text-yellow)" }}>{nameA}</div>
               <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>${symbolA}</div>
             </div>
             <div style={{ fontWeight: 900, color: "var(--text-muted)" }}>VS</div>
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "1.5rem", marginBottom: 4 }}>🔵</div>
+              <div style={{
+                width: 36, height: 36, borderRadius: "50%", display: "inline-flex",
+                alignItems: "center", justifyContent: "center", marginBottom: 8,
+                background: "rgba(59, 130, 246, 0.1)", border: "1px solid rgba(59, 130, 246, 0.2)",
+              }}>
+                <span style={{ fontFamily: "var(--font-heading)", fontWeight: 900, color: "var(--text-blue)", fontSize: "0.85rem" }}>B</span>
+              </div>
               <div style={{ fontWeight: 700, color: "var(--text-blue)" }}>{nameB}</div>
               <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>${symbolB}</div>
             </div>
@@ -305,14 +323,14 @@ export default function CreatePage() {
           )}
 
           <div style={{ display: "flex", gap: 12 }}>
-            <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setStep(2)}>← Back</button>
+            <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setStep(2)}><IconArrowLeft /> Back</button>
             <button
               className="btn btn-accent"
               style={{ flex: 2 }}
               onClick={handleCreate}
               disabled={!wallet.publicKey}
             >
-              {wallet.publicKey ? "⚡ Create Duel" : "Connect Wallet First"}
+              {wallet.publicKey ? <><IconBolt /> Create Duel</> : "Connect Wallet First"}
             </button>
           </div>
         </div>

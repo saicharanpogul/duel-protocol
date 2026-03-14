@@ -18,6 +18,20 @@ import {
   formatSol, formatCountdown, getMarketStatus,
 } from "../../lib/program";
 
+/* ─── SVG Icons ─── */
+const IconTrophy = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+);
+const IconBolt = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+);
+const IconBarChart = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+);
+const IconFlag = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+);
+
 export default function MarketDetailPage() {
   const params = useParams();
   const marketPubkey = params.id as string;
@@ -97,7 +111,6 @@ export default function MarketDetailPage() {
       const side = selectedSide === 0 ? sideA : sideB;
       const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
 
-      // Wrap SOL to WSOL
       const wsolAta = await getAssociatedTokenAddress(NATIVE_MINT, wallet.publicKey);
       const tx = new Transaction();
 
@@ -109,14 +122,12 @@ export default function MarketDetailPage() {
         createSyncNativeInstruction(wsolAta)
       );
 
-      // Create token ATA if needed
       const tokenMint = side.tokenMint;
       const buyerAta = await getAssociatedTokenAddress(tokenMint, wallet.publicKey);
       try { await getAccount(connection, buyerAta); } catch {
         tx.add(createAssociatedTokenAccountInstruction(wallet.publicKey, buyerAta, wallet.publicKey, tokenMint));
       }
 
-      // Buy instruction
       const buyIx = await program.methods
         .buyTokens(selectedSide, new BN(lamports), new BN(1))
         .accounts({
@@ -138,11 +149,11 @@ export default function MarketDetailPage() {
 
       setTxStatus("Awaiting wallet approval...");
       const sig = await provider.sendAndConfirm(tx);
-      setTxStatus(`✅ Bought! Tx: ${sig.slice(0, 8)}...`);
+      setTxStatus(`Success — ${sig.slice(0, 8)}...`);
       setAmount("");
       setTimeout(fetchData, 2000);
     } catch (err: any) {
-      setTxStatus(`❌ ${err.message?.slice(0, 80)}`);
+      setTxStatus(`Failed — ${err.message?.slice(0, 80)}`);
     }
   }
 
@@ -211,11 +222,11 @@ export default function MarketDetailPage() {
       tx.add(sellIx);
       setTxStatus("Awaiting wallet approval...");
       const sig = await provider.sendAndConfirm(tx);
-      setTxStatus(`✅ Sold! Tx: ${sig.slice(0, 8)}...`);
+      setTxStatus(`Success — ${sig.slice(0, 8)}...`);
       setAmount("");
       setTimeout(fetchData, 2000);
     } catch (err: any) {
-      setTxStatus(`❌ ${err.message?.slice(0, 80)}`);
+      setTxStatus(`Failed — ${err.message?.slice(0, 80)}`);
     }
   }
 
@@ -246,11 +257,11 @@ export default function MarketDetailPage() {
     <div className="page-container">
       {/* ─── Header ─── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }} className="animate-fadeInUp">
-        <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span className={`pill-badge ${status === "active" ? "pill-badge-active" : status === "twap" ? "pill-badge-twap" : "pill-badge-resolved"}`}>
-            {status === "active" ? "⚡ Live" : status === "twap" ? "📊 TWAP Active" : "🏁 Resolved"}
+            {status === "active" ? <><IconBolt /> Live</> : status === "twap" ? <><IconBarChart /> TWAP Active</> : <><IconFlag /> Resolved</>}
           </span>
-          <span style={{ marginLeft: 12, fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--text-muted)" }}>
             {countdown || formatCountdown(Number(market.deadline))}
           </span>
         </div>
@@ -265,8 +276,14 @@ export default function MarketDetailPage() {
         alignItems: "center", marginBottom: 32,
       }}>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "2.5rem", marginBottom: 8 }}>🔴</div>
-          <h2 style={{ fontFamily: "var(--font-heading)", fontSize: "1.5rem", fontWeight: 800, color: "var(--text-red)" }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: "50%", display: "inline-flex",
+            alignItems: "center", justifyContent: "center", marginBottom: 12,
+            background: "rgba(251, 191, 36, 0.1)", border: "1px solid rgba(251, 191, 36, 0.2)",
+          }}>
+            <span style={{ fontFamily: "var(--font-heading)", fontWeight: 900, color: "var(--text-yellow)", fontSize: "1.1rem" }}>A</span>
+          </div>
+          <h2 style={{ fontFamily: "var(--font-heading)", fontSize: "1.5rem", fontWeight: 800, color: "var(--text-yellow)" }}>
             {market.nameA}
           </h2>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--text-muted)" }}>
@@ -282,7 +299,13 @@ export default function MarketDetailPage() {
         </div>
 
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "2.5rem", marginBottom: 8 }}>🔵</div>
+          <div style={{
+            width: 48, height: 48, borderRadius: "50%", display: "inline-flex",
+            alignItems: "center", justifyContent: "center", marginBottom: 12,
+            background: "rgba(59, 130, 246, 0.1)", border: "1px solid rgba(59, 130, 246, 0.2)",
+          }}>
+            <span style={{ fontFamily: "var(--font-heading)", fontWeight: 900, color: "var(--text-blue)", fontSize: "1.1rem" }}>B</span>
+          </div>
           <h2 style={{ fontFamily: "var(--font-heading)", fontSize: "1.5rem", fontWeight: 800, color: "var(--text-blue)" }}>
             {market.nameB}
           </h2>
@@ -295,11 +318,11 @@ export default function MarketDetailPage() {
       {/* ─── Sentiment Bar ─── */}
       <div className="animate-fadeInUp animate-delay-2" style={{ marginBottom: 32 }}>
         <div className="sentiment-bar" style={{ height: 14, borderRadius: 7, marginBottom: 8 }}>
-          <div className="sentiment-bar-red" style={{ width: `${pctA}%` }} />
+          <div className="sentiment-bar-yellow" style={{ width: `${pctA}%` }} />
           <div className="sentiment-bar-blue" style={{ width: `${pctB}%` }} />
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem" }}>
-          <span style={{ color: "var(--text-red)", fontWeight: 600 }}>{pctA.toFixed(1)}% · {formatSol(reserveA)} SOL</span>
+          <span style={{ color: "var(--text-yellow)", fontWeight: 600 }}>{pctA.toFixed(1)}% · {formatSol(reserveA)} SOL</span>
           <span style={{ color: "var(--text-blue)", fontWeight: 600 }}>{formatSol(reserveB)} SOL · {pctB.toFixed(1)}%</span>
         </div>
       </div>
@@ -308,14 +331,16 @@ export default function MarketDetailPage() {
       {market.winner !== null && market.winner !== undefined && (
         <div className="animate-fadeInUp" style={{
           padding: "20px 24px", borderRadius: "var(--radius-lg)", marginBottom: 32,
-          background: market.winner === 0 ? "rgba(255, 45, 85, 0.1)" : "rgba(0, 122, 255, 0.1)",
-          border: `1px solid ${market.winner === 0 ? "rgba(255, 45, 85, 0.3)" : "rgba(0, 122, 255, 0.3)"}`,
+          background: market.winner === 0 ? "rgba(251, 191, 36, 0.08)" : "rgba(59, 130, 246, 0.08)",
+          border: `1px solid ${market.winner === 0 ? "rgba(251, 191, 36, 0.2)" : "rgba(59, 130, 246, 0.2)"}`,
           textAlign: "center",
         }}>
-          <div style={{ fontSize: "2rem", marginBottom: 8 }}>🏆</div>
+          <div style={{ marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center", color: market.winner === 0 ? "var(--text-yellow)" : "var(--text-blue)" }}>
+            <IconTrophy />
+          </div>
           <h3 style={{ fontFamily: "var(--font-heading)", fontWeight: 800, marginBottom: 4,
-            color: market.winner === 0 ? "var(--text-red)" : "var(--text-blue)" }}>
-            {market.winner === 0 ? market.nameA : market.nameB} Wins!
+            color: market.winner === 0 ? "var(--text-yellow)" : "var(--text-blue)" }}>
+            {market.winner === 0 ? market.nameA : market.nameB} Wins
           </h3>
           <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem" }}>
             Battle tax has been redistributed to the winning side.
@@ -332,18 +357,18 @@ export default function MarketDetailPage() {
         {/* Side selector */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
           <button
-            className={`btn ${selectedSide === 0 ? "btn-red" : "btn-ghost"}`}
+            className={`btn ${selectedSide === 0 ? "btn-yellow" : "btn-ghost"}`}
             onClick={() => setSelectedSide(0)}
             style={{ width: "100%" }}
           >
-            🔴 {market.nameA}
+            {market.nameA}
           </button>
           <button
             className={`btn ${selectedSide === 1 ? "btn-blue" : "btn-ghost"}`}
             onClick={() => setSelectedSide(1)}
             style={{ width: "100%" }}
           >
-            🔵 {market.nameB}
+            {market.nameB}
           </button>
         </div>
 
@@ -383,7 +408,7 @@ export default function MarketDetailPage() {
         {/* Action buttons */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <button
-            className={`btn ${selectedSide === 0 ? "btn-red" : "btn-blue"}`}
+            className={`btn ${selectedSide === 0 ? "btn-yellow" : "btn-blue"}`}
             onClick={handleBuy}
             disabled={!wallet.publicKey || status === "resolved"}
             style={{ width: "100%" }}

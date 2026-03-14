@@ -1,0 +1,13 @@
+{
+  "name": "@duel-protocol/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "cranker": "bun run cranker.ts"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.31.1",
+    "@solana/spl-token": "^0.4.0",
+    "@solana/web3.js": "^1.95.0"
+  }
+}

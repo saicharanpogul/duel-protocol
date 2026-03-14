@@ -1,10 +1,27 @@
 {
   "name": "duel-protocol",
   "version": "0.1.0",
+  "private": true,
   "license": "MIT",
+  "packageManager": "bun@1.2.4",
+  "workspaces": [
+    "app",
+    "sdk",
+    "scripts"
+  ],
   "scripts": {
+    "dev": "turbo run dev",
+    "dev:app": "turbo run dev --filter=@duel-protocol/app",
+    "build": "turbo run build",
+    "build:app": "turbo run build --filter=@duel-protocol/app",
+    "build:sdk": "turbo run build --filter=@duel-protocol/sdk",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
+    "clean": "turbo run clean",
+    "cranker": "bun run scripts/cranker.ts",
+    "test": "anchor test",
+    "test:skip-build": "anchor test --skip-build"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
@@ -20,6 +37,7 @@
     "mocha": "^9.0.3",
     "prettier": "^2.6.2",
     "ts-mocha": "^10.0.0",
+    "turbo": "^2.4.4",
     "typescript": "^5.7.3"
   }
 }

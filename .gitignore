@@ -28,5 +28,13 @@ keypair.json
 
 # Logs
 *.log
-app/node_modules
-app/.next
+
+# Next.js
+.next/
+
+# Turbo
+.turbo/
+
+# Package manager lockfiles (bun only)
+package-lock.json
+yarn.lock
