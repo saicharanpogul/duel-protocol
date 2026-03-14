@@ -277,8 +277,8 @@
   font-size: 0.65rem;
   padding: 3px 10px;
   border-radius: var(--radius-pill);
-  background: rgba(168, 85, 247, 0.12);
-  color: var(--accent);
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--yellow);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;

@@ -22,7 +22,7 @@ export default function Navbar() {
       <div className="navbar-links">
         <Link
           href="/duels"
-          className={`navbar-link ${pathname === "/duels" ? "active" : ""}`}
+          className={`navbar-link ${pathname === "/duels" || pathname.startsWith("/duels/") ? "active" : ""}`}
         >
           Browse
         </Link>
@@ -31,6 +31,12 @@ export default function Navbar() {
           className={`navbar-link ${pathname === "/create" ? "active" : ""}`}
         >
           Create
+        </Link>
+        <Link
+          href="/docs"
+          className={`navbar-link ${pathname === "/docs" ? "active" : ""}`}
+        >
+          Docs
         </Link>
         <WalletMultiButton />
       </div>
