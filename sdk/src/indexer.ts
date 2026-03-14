@@ -4,10 +4,12 @@ import {
   Logs,
   Context,
 } from "@solana/web3.js";
-import { BorshCoder, EventParser, Program, Event } from "@coral-xyz/anchor";
+import { BorshCoder, EventParser, Program, Event, Idl } from "@coral-xyz/anchor";
 import { Duel } from "./types";
-import IDL from "../idl/duel.json";
+import IDL_JSON from "../idl/duel.json";
 import { PROGRAM_ID } from "./constants";
+
+const IDL = IDL_JSON as unknown as Duel;
 
 // ─── Event Types ───────────────────────────────────────────────────────
 
@@ -137,7 +139,7 @@ export class DuelIndexer {
 
   constructor(connection: Connection) {
     this.connection = connection;
-    const coder = new BorshCoder(IDL as any);
+    const coder = new BorshCoder(IDL as Idl);
     this.eventParser = new EventParser(PROGRAM_ID, coder);
   }
 
@@ -313,17 +315,17 @@ export class DuelIndexer {
   private mapEvent(event: Event): DuelEvent | null {
     switch (event.name) {
       case "MarketCreated":
-        return { name: "MarketCreated", data: event.data as any };
+        return { name: "MarketCreated", data: event.data as unknown as MarketCreatedEvent };
       case "TokensBought":
-        return { name: "TokensBought", data: event.data as any };
+        return { name: "TokensBought", data: event.data as unknown as TokensBoughtEvent };
       case "TokensSold":
-        return { name: "TokensSold", data: event.data as any };
+        return { name: "TokensSold", data: event.data as unknown as TokensSoldEvent };
       case "TwapSampled":
-        return { name: "TwapSampled", data: event.data as any };
+        return { name: "TwapSampled", data: event.data as unknown as TwapSampledEvent };
       case "MarketResolved":
-        return { name: "MarketResolved", data: event.data as any };
+        return { name: "MarketResolved", data: event.data as unknown as MarketResolvedEvent };
       case "TokensGraduated":
-        return { name: "TokensGraduated", data: event.data as any };
+        return { name: "TokensGraduated", data: event.data as unknown as TokensGraduatedEvent };
       default:
         return null;
     }

@@ -14,7 +14,7 @@ import {
   NATIVE_MINT,
 } from "@solana/spl-token";
 import { Duel } from "./types";
-import IDL from "../idl/duel.json";
+import IDL_JSON from "../idl/duel.json";
 import {
   PROGRAM_ID,
   METEORA_DAMM_V2_PROGRAM_ID,
@@ -37,10 +37,16 @@ import {
 // ─── Program Instance ────────────────────────────────────────────────────
 
 /**
+ * Cast IDL JSON to the typed Duel IDL — enables full type inference
+ * on Program<Duel>.methods.xxx().accountsPartial()
+ */
+const IDL = IDL_JSON as unknown as Duel;
+
+/**
  * Create a Duel Protocol program instance.
  */
 export function createDuelProgram(provider: AnchorProvider): Program<Duel> {
-  return new Program(IDL as any, provider);
+  return new Program<Duel>(IDL, provider);
 }
 
 // ─── Account Fetchers ────────────────────────────────────────────────────
@@ -236,12 +242,12 @@ export async function buildInitializeConfigInstruction(
 
   const instruction = await program.methods
     .initializeConfig(defaultProtocolFeeBps, marketCreationFee)
-    .accounts({
+    .accountsPartial({
       admin,
       config: configPda,
       protocolFeeAccount,
       systemProgram: SystemProgram.programId,
-    } as any)
+    })
     .instruction();
 
   return { instruction };
@@ -271,12 +277,12 @@ export async function buildUpdateConfigInstruction(
       opts.marketCreationFee ?? null,
       opts.minMarketDuration ?? null
     )
-    .accounts({
+    .accountsPartial({
       admin,
       config: configPda,
       newProtocolFeeAccount: opts.newProtocolFeeAccount ?? null,
       newAdmin: opts.newAdmin ?? null,
-    } as any)
+    })
     .instruction();
 
   return { instruction };
@@ -355,7 +361,7 @@ export async function buildInitializeMarketInstruction(
       params.oracleAuthority,
       params.oracleDisputeWindow
     )
-    .accounts({
+    .accountsPartial({
       creator,
       market: accounts.market,
       sideA: accounts.sideA,
@@ -377,7 +383,7 @@ export async function buildInitializeMarketInstruction(
       systemProgram: SystemProgram.programId,
       tokenProgram: TOKEN_PROGRAM_ID,
       rent: SYSVAR_RENT_PUBKEY,
-    } as any)
+    })
     .instruction();
 
   return { instruction, accounts };
@@ -433,7 +439,7 @@ export async function buildBuyTokensInstruction(
 
   const instruction = await program.methods
     .buyTokens(side, quoteAmount, minTokensOut)
-    .accounts({
+    .accountsPartial({
       buyer,
       market,
       sideAccount: sideKey,
@@ -446,7 +452,7 @@ export async function buildBuyTokensInstruction(
       config: configPda,
       tokenProgram: TOKEN_PROGRAM_ID,
       quoteTokenProgram: TOKEN_PROGRAM_ID,
-    } as any)
+    })
     .instruction();
 
   return { preInstructions, instruction };
@@ -478,7 +484,7 @@ export async function buildSellTokensInstruction(
 
   const instruction = await program.methods
     .sellTokens(side, tokenAmount, minQuoteOut)
-    .accounts({
+    .accountsPartial({
       seller,
       market,
       sideAccount: sideKey,
@@ -491,7 +497,7 @@ export async function buildSellTokensInstruction(
       config: configPda,
       tokenProgram: TOKEN_PROGRAM_ID,
       quoteTokenProgram: TOKEN_PROGRAM_ID,
-    } as any)
+    })
     .instruction();
 
   return { instruction };
@@ -509,12 +515,12 @@ export async function buildRecordTwapSampleInstruction(
 
   const instruction = await program.methods
     .recordTwapSample()
-    .accounts({
+    .accountsPartial({
       cranker,
       market,
       sideA: marketData.sideA,
       sideB: marketData.sideB,
-    } as any)
+    })
     .instruction();
 
   return { instruction };
@@ -534,7 +540,7 @@ export async function buildResolveMarketInstruction(
 
   const instruction = await program.methods
     .resolveMarket()
-    .accounts({
+    .accountsPartial({
       resolver,
       market,
       sideA: marketData.sideA,
@@ -545,7 +551,7 @@ export async function buildResolveMarketInstruction(
       protocolFeeAccount: marketData.protocolFeeAccount,
       creatorFeeAccount: marketData.creatorFeeAccount,
       quoteTokenProgram: TOKEN_PROGRAM_ID,
-    } as any)
+    })
     .instruction();
 
   return { instruction };
@@ -566,7 +572,7 @@ export async function buildResolveWithOracleInstruction(
 
   const instruction = await program.methods
     .resolveWithOracle(winningSide)
-    .accounts({
+    .accountsPartial({
       oracle,
       market,
       sideA: marketData.sideA,
@@ -577,7 +583,7 @@ export async function buildResolveWithOracleInstruction(
       protocolFeeAccount: marketData.protocolFeeAccount,
       creatorFeeAccount: marketData.creatorFeeAccount,
       quoteTokenProgram: TOKEN_PROGRAM_ID,
-    } as any)
+    })
     .instruction();
 
   return { instruction };
@@ -609,7 +615,7 @@ export async function buildSellPostResolutionInstruction(
 
   const instruction = await program.methods
     .sellPostResolution(side, tokenAmount, minQuoteOut)
-    .accounts({
+    .accountsPartial({
       seller,
       market,
       sideAccount: sideKey,
@@ -622,7 +628,7 @@ export async function buildSellPostResolutionInstruction(
       config: configPda,
       tokenProgram: TOKEN_PROGRAM_ID,
       quoteTokenProgram: TOKEN_PROGRAM_ID,
-    } as any)
+    })
     .instruction();
 
   return { instruction };
@@ -701,7 +707,7 @@ export async function buildGraduateInstruction(
   // Build the graduation instruction
   const graduateInstruction = await program.methods
     .graduateToDex(side)
-    .accounts({
+    .accountsPartial({
       authority,
       market,
       sideAccount: sideKey,
@@ -730,7 +736,7 @@ export async function buildGraduateInstruction(
         "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
       ),
       systemProgram: SystemProgram.programId,
-    } as any)
+    })
     .signers([positionNftMint])
     .instruction();
 
@@ -773,7 +779,7 @@ export async function buildClaimPoolFeesInstruction(
 
   const instruction = await program.methods
     .claimPoolFees(side)
-    .accounts({
+    .accountsPartial({
       authority,
       market,
       config: configPda,
@@ -793,7 +799,7 @@ export async function buildClaimPoolFeesInstruction(
       eventAuthority: damm.eventAuthority,
       meteoraProgram: METEORA_DAMM_V2_PROGRAM_ID,
       tokenProgram: TOKEN_PROGRAM_ID,
-    } as any)
+    })
     .instruction();
 
   return { instruction };
@@ -823,7 +829,7 @@ export async function buildLockPositionInstruction(
 
   const instruction = await program.methods
     .lockPosition(side, lockLiquidity)
-    .accounts({
+    .accountsPartial({
       authority,
       market,
       sideAccount: sideKey,
@@ -832,7 +838,7 @@ export async function buildLockPositionInstruction(
       positionNftAccount: damm.positionNftAccount,
       eventAuthority: damm.eventAuthority,
       meteoraProgram: METEORA_DAMM_V2_PROGRAM_ID,
-    } as any)
+    })
     .instruction();
 
   return { instruction };
@@ -867,7 +873,7 @@ export async function buildRemoveLiquidityInstruction(
 
   const instruction = await program.methods
     .removeLiquidity(side, liquidityDelta, minTokenA, minTokenB)
-    .accounts({
+    .accountsPartial({
       authority,
       market,
       config: configPda,
@@ -886,7 +892,7 @@ export async function buildRemoveLiquidityInstruction(
       tokenBProgram: TOKEN_PROGRAM_ID,
       eventAuthority: damm.eventAuthority,
       meteoraProgram: METEORA_DAMM_V2_PROGRAM_ID,
-    } as any)
+    })
     .instruction();
 
   return { instruction };
@@ -917,7 +923,7 @@ export async function buildClosePositionInstruction(
 
   const instruction = await program.methods
     .closePosition(side)
-    .accounts({
+    .accountsPartial({
       authority,
       market,
       config: configPda,
@@ -931,7 +937,7 @@ export async function buildClosePositionInstruction(
       token2022Program: TOKEN_2022_PROGRAM_ID,
       eventAuthority: damm.eventAuthority,
       meteoraProgram: METEORA_DAMM_V2_PROGRAM_ID,
-    } as any)
+    })
     .instruction();
 
   return { instruction };
@@ -955,7 +961,7 @@ export async function buildCloseQuoteVaultInstruction(
 
   return program.methods
     .closeQuoteVault(side)
-    .accounts({
+    .accountsPartial({
       closer: rentReceiver,
       market,
       sideAccount: sideKey,
@@ -964,7 +970,7 @@ export async function buildCloseQuoteVaultInstruction(
       rentReceiver,
       tokenProgram: TOKEN_PROGRAM_ID,
       quoteTokenProgram: TOKEN_PROGRAM_ID,
-    } as any)
+    })
     .instruction();
 }
 
@@ -983,14 +989,14 @@ export async function buildCloseMarketInstruction(
 
   const instruction = await program.methods
     .closeMarket(side)
-    .accounts({
+    .accountsPartial({
       authority,
       market,
       sideA: marketData.sideA,
       sideB: marketData.sideB,
       config: configPda,
       systemProgram: SystemProgram.programId,
-    } as any)
+    })
     .instruction();
 
   return { instruction };
@@ -1010,13 +1016,13 @@ export async function buildEmergencyResolveInstruction(
 
   const instruction = await program.methods
     .emergencyResolve()
-    .accounts({
+    .accountsPartial({
       resolver,
       market,
       config: configPda,
       sideA: marketData.sideA,
       sideB: marketData.sideB,
-    } as any)
+    })
     .instruction();
 
   return { instruction };
