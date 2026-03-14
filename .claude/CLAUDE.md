@@ -31,26 +31,38 @@ duel-protocol/
 │   └── duel/                   # Core Anchor program
 │       ├── src/
 │       │   ├── lib.rs          # Program entrypoint and instruction dispatch
-│       │   ├── state/          # Account data structures
-│       │   ├── instructions/   # Instruction handlers
-│       │   ├── errors.rs       # Custom error codes
-│       │   ├── events.rs       # Event definitions
-│       │   └── math/           # Bonding curve and TWAP math
+│       │   ├── state/          # Account data structures (market, side, config)
+│       │   ├── instructions/   # 18 instruction handlers
+│       │   ├── cpi/            # Meteora DAMM v2 CPI helpers
+│       │   ├── errors.rs       # Custom error codes (22 variants)
+│       │   ├── events.rs       # Event definitions (9 events)
+│       │   ├── constants.rs    # On-chain constants
+│       │   └── math/           # Bonding curve, TWAP, and penalty math
 │       └── Cargo.toml
 ├── sdk/                        # TypeScript SDK
 │   ├── src/
-│   │   ├── client.ts           # Main DuelClient class
-│   │   ├── types.ts            # TypeScript types from IDL
-│   │   ├── math.ts             # Client-side curve math (mirrors on-chain)
-│   │   └── utils.ts            # PDA derivation, helpers
+│   │   ├── index.ts            # Re-exports
+│   │   ├── client.ts           # 18 instruction builders + 5 math helpers
+│   │   ├── pda.ts              # PDA derivation (market, side, mint, vault, config, metadata, DAMM v2)
+│   │   ├── constants.ts        # Program IDs, mints, fee constants
+│   │   └── indexer.ts          # Real-time event indexer with analytics
+│   ├── idl/                    # Program IDL JSON
 │   ├── package.json
 │   └── tsconfig.json
-├── tests/                      # Integration tests
-│   ├── duel.ts                 # TypeScript integration tests
-│   └── fixtures/               # Test fixtures and helpers
-├── scripts/                    # Utility scripts (cranker, migration, etc.)
+├── tests/                      # Integration tests (85 tests, 8 suites)
+│   ├── duel.ts                 # Core lifecycle tests
+│   ├── duel-edge-cases.ts      # Invalid inputs, slippage, double resolve
+│   ├── capital-efficiency.ts   # Bonding curve efficiency, penalty, TWAP
+│   ├── graduation.ts           # DEX graduation E2E with Meteora DAMM v2
+│   ├── close-market.ts         # Market/account closure and rent recovery
+│   ├── protocol-config.ts      # Config, pause, admin transfer
+│   └── twap-advanced.ts        # Draw, creator fees, observation clamping
+├── scripts/                    # Utility scripts
+│   └── cranker.ts              # TWAP cranker daemon
+├── app/                        # duels.fun frontend (Next.js)
+├── example/                    # Developer example app (Next.js)
 ├── docs/                       # Documentation
-│   └── THESIS.md               # Technical thesis
+│   └── THESIS.md               # Technical thesis (561 lines)
 ├── Anchor.toml
 ├── Cargo.toml                  # Workspace Cargo.toml
 ├── package.json                # Root package.json (workspace)
