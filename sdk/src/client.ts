@@ -13,7 +13,7 @@ import {
   TOKEN_PROGRAM_ID,
   NATIVE_MINT,
 } from "@solana/spl-token";
-import { Duel } from "../../target/types/duel";
+import { Duel } from "./types";
 import IDL from "../idl/duel.json";
 import {
   PROGRAM_ID,

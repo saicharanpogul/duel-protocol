@@ -1,13 +1,14 @@
 {
   "name": "@duel-protocol/sdk",
-  "version": "0.1.0",
-  "description": "TypeScript SDK for Duel Protocol",
+  "version": "0.1.1",
+  "description": "TypeScript SDK for Duel Protocol — binary outcome markets with TWAP-resolved bonding curves on Solana",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "bun run build"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
@@ -21,5 +22,12 @@
     "dist",
     "idl"
   ],
+  "keywords": ["solana", "duel", "prediction-market", "bonding-curve", "twap", "anchor"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/saicharanpogul/duel-protocol",
+    "directory": "sdk"
+  },
+  "homepage": "https://github.com/saicharanpogul/duel-protocol#readme",
   "license": "MIT"
 }

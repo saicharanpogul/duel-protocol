@@ -5,4 +5,4 @@ export * from "./client";
 export * from "./indexer";
 
 // Re-export types from IDL
-export type { Duel } from "../../target/types/duel";
+export type { Duel } from "./types";

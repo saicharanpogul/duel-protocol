@@ -5,7 +5,7 @@ import {
   Context,
 } from "@solana/web3.js";
 import { BorshCoder, EventParser, Program, Event } from "@coral-xyz/anchor";
-import { Duel } from "../../target/types/duel";
+import { Duel } from "./types";
 import IDL from "../idl/duel.json";
 import { PROGRAM_ID } from "./constants";
 
