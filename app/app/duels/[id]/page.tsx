@@ -17,6 +17,7 @@ import {
   getProgram, getReadonlyProgram, findConfigPda,
   formatSol, formatCountdown, getMarketStatus,
 } from "../../lib/program";
+import { supabase, hasSupabase } from "../../lib/supabase";
 
 /* ─── SVG Icons ─── */
 const IconTrophy = () => (
@@ -50,6 +51,7 @@ export default function MarketDetailPage() {
   const [userBalanceA, setUserBalanceA] = useState(0);
   const [userBalanceB, setUserBalanceB] = useState(0);
   const [countdown, setCountdown] = useState("");
+  const [trades, setTrades] = useState<any[]>([]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -89,6 +91,18 @@ export default function MarketDetailPage() {
   }, [marketPubkey, connection, wallet.publicKey]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Fetch trade history from Supabase
+  useEffect(() => {
+    if (!hasSupabase || !supabase) return;
+    supabase
+      .from("trades")
+      .select("*")
+      .eq("market_pubkey", marketPubkey)
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .then(({ data }) => { if (data) setTrades(data); });
+  }, [marketPubkey]);
 
   useEffect(() => {
     if (!market) return;
@@ -466,6 +480,54 @@ export default function MarketDetailPage() {
           ))}
         </div>
       </div>
+
+      {/* ─── Trade History ─── */}
+      {trades.length > 0 && (
+        <div className="card animate-fadeInUp" style={{ marginTop: 24 }}>
+          <h3 style={{ fontFamily: "var(--font-heading)", fontSize: "1rem", fontWeight: 700, marginBottom: 16 }}>
+            Recent Trades
+          </h3>
+          <div style={{ display: "grid", gap: 0 }}>
+            <div style={{
+              display: "grid", gridTemplateColumns: "60px 1fr 120px 80px",
+              gap: 8, padding: "8px 0", borderBottom: "1px solid var(--border)",
+              fontSize: "0.7rem", fontWeight: 600, color: "var(--text-muted)",
+              textTransform: "uppercase", letterSpacing: "0.06em",
+            }}>
+              <span>Type</span>
+              <span>Trader</span>
+              <span style={{ textAlign: "right" }}>Amount</span>
+              <span style={{ textAlign: "right" }}>Side</span>
+            </div>
+            {trades.map((t: any, i: number) => (
+              <div key={t.id || i} style={{
+                display: "grid", gridTemplateColumns: "60px 1fr 120px 80px",
+                gap: 8, padding: "8px 0", borderBottom: "1px solid var(--border)",
+                fontSize: "0.8rem",
+              }}>
+                <span style={{
+                  color: t.trade_type === "buy" ? "var(--success)" : "#ef4444",
+                  fontWeight: 600, textTransform: "uppercase", fontSize: "0.75rem",
+                }}>
+                  {t.trade_type}
+                </span>
+                <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
+                  {t.trader?.slice(0, 4)}...{t.trader?.slice(-4)}
+                </span>
+                <span style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontWeight: 600 }}>
+                  {formatSol(t.sol_amount)} SOL
+                </span>
+                <span style={{
+                  textAlign: "right", fontWeight: 600,
+                  color: t.side === 0 ? "var(--text-yellow)" : "var(--text-blue)",
+                }}>
+                  {t.side === 0 ? market?.nameA : market?.nameB}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
