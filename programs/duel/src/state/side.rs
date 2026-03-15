@@ -1,5 +1,9 @@
 use anchor_lang::prelude::*;
 
+/// Maximum TWAP samples stored per side (ring buffer size).
+/// 360 samples at 5s intervals = 30 minutes of data.
+pub const MAX_TWAP_SAMPLES: usize = 360;
+
 #[account]
 pub struct Side {
     /// Parent market PDA
@@ -24,6 +28,12 @@ pub struct Side {
     pub last_observation: u64,
     /// Accumulated sell penalty (quote tokens retained in vault beyond curve math)
     pub penalty_accumulated: u64,
+    /// Ring buffer of price samples for trimmed-mean TWAP
+    pub twap_samples: [u64; MAX_TWAP_SAMPLES],
+    /// Write index into ring buffer (wraps at MAX_TWAP_SAMPLES)
+    pub twap_write_index: u16,
+    /// Number of samples written (saturates at MAX_TWAP_SAMPLES)
+    pub twap_sample_count: u16,
     /// PDA bump
     pub bump: u8,
 }
@@ -41,7 +51,10 @@ impl Side {
         + 16  // twap_accumulator
         + 8   // last_observation
         + 8   // penalty_accumulated
+        + (8 * MAX_TWAP_SAMPLES)  // twap_samples ring buffer
+        + 2   // twap_write_index
+        + 2   // twap_sample_count
         + 1   // bump
-        + 16; // padding (reduced from 24)
+        + 16; // padding
 }
 

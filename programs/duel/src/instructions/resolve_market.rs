@@ -4,6 +4,7 @@ use anchor_spl::token_interface::{self, TokenAccount, TokenInterface, TransferCh
 use crate::constants::BPS_DENOMINATOR;
 use crate::errors::DuelError;
 use crate::events::MarketResolved;
+use crate::math::twap;
 use crate::state::*;
 
 #[derive(Accounts)]
@@ -133,15 +134,32 @@ pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
 
     let samples = twap_samples_count as u128;
 
-    // Calculate final TWAPs
-    let final_twap_a = ctx.accounts.side_a
-        .twap_accumulator
-        .checked_div(samples)
-        .ok_or(DuelError::MathOverflow)? as u64;
-    let final_twap_b = ctx.accounts.side_b
-        .twap_accumulator
-        .checked_div(samples)
-        .ok_or(DuelError::MathOverflow)? as u64;
+    // Calculate final TWAPs — use trimmed mean if sufficient ring buffer samples
+    let final_twap_a = if ctx.accounts.side_a.twap_sample_count >= 20 {
+        twap::trimmed_mean(
+            &ctx.accounts.side_a.twap_samples,
+            ctx.accounts.side_a.twap_sample_count,
+            5, // trim 5% from each tail
+        )?
+    } else {
+        // Fallback to accumulator-based simple mean
+        ctx.accounts.side_a
+            .twap_accumulator
+            .checked_div(samples)
+            .ok_or(DuelError::MathOverflow)? as u64
+    };
+    let final_twap_b = if ctx.accounts.side_b.twap_sample_count >= 20 {
+        twap::trimmed_mean(
+            &ctx.accounts.side_b.twap_samples,
+            ctx.accounts.side_b.twap_sample_count,
+            5,
+        )?
+    } else {
+        ctx.accounts.side_b
+            .twap_accumulator
+            .checked_div(samples)
+            .ok_or(DuelError::MathOverflow)? as u64
+    };
 
     // Check for draw
     let is_draw = if min_twap_spread_bps > 0 {

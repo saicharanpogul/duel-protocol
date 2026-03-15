@@ -116,6 +116,20 @@ pub fn handler(
         &[bump],
     ]];
 
+    // ─── Token transfers ─────────────────────────────────────────
+    // With pTokens batch CPI, both transfers execute in a single CPI call
+    // saving ~1,000 CU from eliminated second CPI base cost.
+    #[cfg(feature = "ptokens")]
+    {
+        // TODO: When pTokens SDK is available, combine both transfers
+        // into a single batch CPI call:
+        //   batch([
+        //     transfer_checked(buyer_quote → quote_vault, quote_amount),
+        //     transfer_checked(token_vault → buyer_token, tokens),
+        //   ])
+        // For now, fall through to individual transfers below.
+    }
+
     // Transfer quote tokens from buyer to quote vault
     let quote_decimals = ctx.accounts.quote_mint.decimals;
     token_interface::transfer_checked(

@@ -7,11 +7,11 @@ pub const MAX_PROTOCOL_FEE_BPS: u16 = 500;
 /// Max sell penalty: 30% (3000 bps)
 pub const MAX_SELL_PENALTY_BPS: u16 = 3_000;
 
-/// Minimum TWAP sampling interval in seconds
-pub const MIN_TWAP_INTERVAL: u64 = 10;
+/// Minimum TWAP sampling interval in seconds (pTokens: dense sampling viable)
+pub const MIN_TWAP_INTERVAL: u64 = 1;
 
 /// Maximum TWAP sampling interval in seconds
-pub const MAX_TWAP_INTERVAL: u64 = 300;
+pub const MAX_TWAP_INTERVAL: u64 = 120;
 
 /// Base sell fee in basis points (1%)
 pub const BASE_SELL_FEE_BPS: u16 = 100;

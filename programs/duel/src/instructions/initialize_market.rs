@@ -313,6 +313,9 @@ pub fn handler(
     side_a.twap_accumulator = 0;
     side_a.last_observation = 0;
     side_a.penalty_accumulated = 0;
+    side_a.twap_samples = [0u64; crate::state::side::MAX_TWAP_SAMPLES];
+    side_a.twap_write_index = 0;
+    side_a.twap_sample_count = 0;
     side_a.bump = ctx.bumps.side_a;
 
     // Initialize Side B
@@ -327,6 +330,9 @@ pub fn handler(
     side_b.twap_accumulator = 0;
     side_b.last_observation = 0;
     side_b.penalty_accumulated = 0;
+    side_b.twap_samples = [0u64; crate::state::side::MAX_TWAP_SAMPLES];
+    side_b.twap_write_index = 0;
+    side_b.twap_sample_count = 0;
     side_b.bump = ctx.bumps.side_b;
 
     // Mint total supply into each token vault

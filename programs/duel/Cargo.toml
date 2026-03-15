@@ -10,6 +10,7 @@ name = "duel"
 
 [features]
 default = []
+ptokens = []  # Enable pTokens batch CPI optimizations (requires pTokens on mainnet)
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
@@ -24,7 +25,7 @@ blake3 = "=1.5.5"
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(target_os, values("solana"))',
-    'cfg(feature, values("anchor-debug", "production", "custom-heap", "custom-panic"))',
+    'cfg(feature, values("anchor-debug", "production", "custom-heap", "custom-panic", "ptokens"))',
     'cfg(anchor_debug)',
     'cfg(production)'
 ] }

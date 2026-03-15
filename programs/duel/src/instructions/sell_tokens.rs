@@ -139,6 +139,20 @@ pub fn handler(
         &[bump],
     ]];
 
+    // ─── Token transfers ─────────────────────────────────────────
+    // With pTokens batch CPI, both transfers execute in a single CPI call
+    // saving ~1,000 CU from eliminated second CPI base cost.
+    #[cfg(feature = "ptokens")]
+    {
+        // TODO: When pTokens SDK is available, combine both transfers
+        // into a single batch CPI call:
+        //   batch([
+        //     transfer_checked(seller_token → token_vault, token_amount),
+        //     transfer_checked(quote_vault → seller_quote, quote_after_penalty),
+        //   ])
+        // For now, fall through to individual transfers below.
+    }
+
     // Transfer tokens from seller to vault (transfer_checked for Token-2022 compat)
     let decimals = ctx.accounts.token_mint.decimals;
 

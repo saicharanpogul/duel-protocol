@@ -37,11 +37,11 @@ export const MAX_PROTOCOL_FEE_BPS = 500;
 /** Maximum sell penalty BPS */
 export const MAX_SELL_PENALTY_BPS = 3_000;
 
-/** Minimum TWAP interval (seconds) */
-export const MIN_TWAP_INTERVAL = 10;
+/** Minimum TWAP interval (seconds) — lowered for pTokens dense sampling */
+export const MIN_TWAP_INTERVAL = 1;
 
 /** Maximum TWAP interval (seconds) */
-export const MAX_TWAP_INTERVAL = 3_600;
+export const MAX_TWAP_INTERVAL = 120;
 
 /** Minimum graduation reserve (lamports) */
 export const MIN_GRADUATION_RESERVE = 100_000_000; // 0.1 SOL
@@ -71,3 +71,21 @@ export const BASE_SELL_FEE_BPS = 100;
 
 /** Default emergency window in seconds (24 hours) */
 export const DEFAULT_EMERGENCY_WINDOW = 86_400;
+
+// ─── pTokens-era recommended defaults ────────────────────────────
+
+/** Recommended TWAP sampling interval (seconds) for pTokens-era markets */
+export const RECOMMENDED_TWAP_INTERVAL = 5;
+
+/** Recommended TWAP observation window (30 minutes) */
+export const RECOMMENDED_TWAP_WINDOW = 1_800;
+
+/** Maximum ring buffer samples per side (matches on-chain MAX_TWAP_SAMPLES) */
+export const MAX_TWAP_SAMPLES = 360;
+
+/** Trimmed mean percentage for TWAP outlier rejection */
+export const TWAP_TRIM_PCT = 5;
+
+/** Minimum ring buffer samples for trimmed-mean TWAP (below falls back to simple mean) */
+export const TRIMMED_MEAN_MIN_SAMPLES = 20;
+

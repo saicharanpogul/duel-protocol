@@ -4,6 +4,7 @@ use crate::errors::DuelError;
 use crate::events::TwapSampled;
 use crate::math::bonding_curve;
 use crate::state::*;
+use crate::state::side::MAX_TWAP_SAMPLES;
 
 #[derive(Accounts)]
 pub struct RecordTwapSample<'info> {
@@ -87,6 +88,17 @@ pub fn handler(ctx: Context<RecordTwapSample>) -> Result<()> {
         .twap_accumulator
         .checked_add(obs_b as u128)
         .ok_or(DuelError::MathOverflow)?;
+
+    // Write to ring buffers for trimmed-mean TWAP
+    let idx_a = (side_a.twap_write_index as usize) % MAX_TWAP_SAMPLES;
+    side_a.twap_samples[idx_a] = obs_a;
+    side_a.twap_write_index = ((side_a.twap_write_index as usize + 1) % MAX_TWAP_SAMPLES) as u16;
+    side_a.twap_sample_count = side_a.twap_sample_count.saturating_add(1).min(MAX_TWAP_SAMPLES as u16);
+
+    let idx_b = (side_b.twap_write_index as usize) % MAX_TWAP_SAMPLES;
+    side_b.twap_samples[idx_b] = obs_b;
+    side_b.twap_write_index = ((side_b.twap_write_index as usize + 1) % MAX_TWAP_SAMPLES) as u16;
+    side_b.twap_sample_count = side_b.twap_sample_count.saturating_add(1).min(MAX_TWAP_SAMPLES as u16);
 
     // Update market state
     market.twap_samples_count = market
