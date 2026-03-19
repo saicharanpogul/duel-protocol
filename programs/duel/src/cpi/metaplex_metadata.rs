@@ -137,3 +137,113 @@ pub fn create_metadata_v3<'info>(
 
     Ok(())
 }
+
+/// Discriminator for UpdateMetadataAccountV2 (instruction index 15)
+pub const UPDATE_METADATA_V2_DISCRIMINATOR: u8 = 15;
+
+/// UpdateMetadataAccountV2 args (borsh-serialized after discriminator)
+#[derive(AnchorSerialize)]
+pub struct UpdateMetadataAccountV2Args {
+    pub data: Option<DataV2>,
+    pub new_update_authority: Option<Pubkey>,
+    pub primary_sale_happened: Option<bool>,
+    pub is_mutable: Option<bool>,
+}
+
+/// Build and invoke UpdateMetadataAccountV2 CPI.
+///
+/// Updates metadata fields on an existing Metaplex metadata account.
+/// The update_authority (market PDA) must sign via invoke_signed.
+///
+/// Accounts:
+/// 0. metadata (writable) - Metadata PDA
+/// 1. update_authority (signer) - Current update authority
+pub fn update_metadata_v2<'info>(
+    metadata: AccountInfo<'info>,
+    update_authority: AccountInfo<'info>,
+    token_metadata_program: AccountInfo<'info>,
+    data: DataV2,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let args = UpdateMetadataAccountV2Args {
+        data: Some(data),
+        new_update_authority: None,
+        primary_sale_happened: None,
+        is_mutable: None,
+    };
+
+    let mut ix_data = Vec::with_capacity(512);
+    ix_data.push(UPDATE_METADATA_V2_DISCRIMINATOR);
+    args.serialize(&mut ix_data)?;
+
+    let accounts = vec![
+        AccountMeta::new(metadata.key(), false),
+        AccountMeta::new_readonly(update_authority.key(), true),
+    ];
+
+    let ix = Instruction {
+        program_id: TOKEN_METADATA_PROGRAM_ID,
+        accounts,
+        data: ix_data,
+    };
+
+    let account_infos = &[
+        metadata,
+        update_authority,
+        token_metadata_program,
+    ];
+
+    invoke_signed(&ix, account_infos, signer_seeds)?;
+
+    Ok(())
+}
+
+/// Read name, symbol, and URI from a Metaplex metadata account's raw data.
+///
+/// Metaplex metadata layout (borsh):
+///   key: u8 (1 byte)
+///   update_authority: Pubkey (32 bytes)
+///   mint: Pubkey (32 bytes)
+///   data.name: String (4-byte LE length + bytes, padded with nulls to 32 chars)
+///   data.symbol: String (4-byte LE length + bytes, padded with nulls to 10 chars)
+///   data.uri: String (4-byte LE length + bytes, padded with nulls to 200 chars)
+///   data.seller_fee_basis_points: u16
+///   ... (rest not needed)
+pub fn read_metadata_fields(data: &[u8]) -> Result<(String, String, String)> {
+    let mut offset: usize = 1 + 32 + 32; // skip key + update_authority + mint
+
+    // Read name
+    let name = read_borsh_string(data, &mut offset)?;
+    // Read symbol
+    let symbol = read_borsh_string(data, &mut offset)?;
+    // Read uri
+    let uri = read_borsh_string(data, &mut offset)?;
+
+    Ok((
+        name.trim_end_matches('\0').to_string(),
+        symbol.trim_end_matches('\0').to_string(),
+        uri.trim_end_matches('\0').to_string(),
+    ))
+}
+
+/// Read a borsh-serialized String from raw bytes at the given offset.
+/// Advances offset past the string.
+fn read_borsh_string(data: &[u8], offset: &mut usize) -> Result<String> {
+    require!(
+        *offset + 4 <= data.len(),
+        anchor_lang::error::ErrorCode::AccountDidNotDeserialize
+    );
+    let len = u32::from_le_bytes(
+        data[*offset..*offset + 4]
+            .try_into()
+            .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize)?,
+    ) as usize;
+    *offset += 4;
+    require!(
+        *offset + len <= data.len(),
+        anchor_lang::error::ErrorCode::AccountDidNotDeserialize
+    );
+    let s = String::from_utf8_lossy(&data[*offset..*offset + len]).to_string();
+    *offset += len;
+    Ok(s)
+}

@@ -47,45 +47,22 @@ pub fn handler(ctx: Context<RecordTwapSample>) -> Result<()> {
         require!(elapsed >= market.twap_interval as i64, DuelError::TwapSampleTooEarly);
     }
 
-    // Calculate current spot prices
+    // Calculate current spot prices using default curve params
+    let params = CurveParams::default_params();
     let side_a = &mut ctx.accounts.side_a;
     let side_b = &mut ctx.accounts.side_b;
 
-    let price_a = bonding_curve::price(side_a.circulating_supply, &market.curve_params)?;
-    let price_b = bonding_curve::price(side_b.circulating_supply, &market.curve_params)?;
+    let price_a = bonding_curve::price(side_a.circulating_supply, &params)?;
+    let price_b = bonding_curve::price(side_b.circulating_supply, &params)?;
 
-    // Determine observation values (lagging or raw)
-    let max_change = market.max_observation_change_per_update;
-    let (obs_a, obs_b) = if max_change > 0 {
-        // Lagging observation: clamp toward spot price by at most max_change
-        let obs_a = if market.twap_samples_count == 0 {
-            // First sample: use raw price
-            price_a
-        } else {
-            clamp_observation(side_a.last_observation, price_a, max_change)
-        };
-        let obs_b = if market.twap_samples_count == 0 {
-            price_b
-        } else {
-            clamp_observation(side_b.last_observation, price_b, max_change)
-        };
-        // Store observations for next sample
-        side_a.last_observation = obs_a;
-        side_b.last_observation = obs_b;
-        (obs_a, obs_b)
-    } else {
-        // Standard TWAP: use raw spot prices
-        (price_a, price_b)
-    };
-
-    // Update accumulators with observation values
+    // Update accumulators with raw spot prices (no lagging observation)
     side_a.twap_accumulator = side_a
         .twap_accumulator
-        .checked_add(obs_a as u128)
+        .checked_add(price_a as u128)
         .ok_or(DuelError::MathOverflow)?;
     side_b.twap_accumulator = side_b
         .twap_accumulator
-        .checked_add(obs_b as u128)
+        .checked_add(price_b as u128)
         .ok_or(DuelError::MathOverflow)?;
 
     // Update market state
@@ -104,24 +81,9 @@ pub fn handler(ctx: Context<RecordTwapSample>) -> Result<()> {
         market: market.key(),
         price_a,
         price_b,
-        observation_a: obs_a,
-        observation_b: obs_b,
         sample_count: market.twap_samples_count,
         timestamp: now,
     });
 
     Ok(())
-}
-
-/// Clamp observation toward spot price by at most max_change per update.
-/// If spot > observation: observation moves up by min(spot - observation, max_change)
-/// If spot < observation: observation moves down by min(observation - spot, max_change)
-fn clamp_observation(current_observation: u64, spot_price: u64, max_change: u64) -> u64 {
-    if spot_price > current_observation {
-        let delta = spot_price - current_observation;
-        current_observation.saturating_add(delta.min(max_change))
-    } else {
-        let delta = current_observation - spot_price;
-        current_observation.saturating_sub(delta.min(max_change))
-    }
 }

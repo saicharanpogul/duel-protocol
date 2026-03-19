@@ -15,7 +15,8 @@ pub struct SellPostResolution<'info> {
     #[account(
         mut,
         constraint = market.status == MarketStatus::Resolved @ DuelError::MarketNotResolved,
-        constraint = !market.locked @ DuelError::MarketAlreadyResolved,
+        constraint = market.winner.is_none() @ DuelError::EmergencyOnlyOperation,
+        constraint = !market.locked @ DuelError::ReentrancyLocked,
     )]
     pub market: Account<'info, Market>,
 
@@ -81,14 +82,18 @@ pub fn handler(
 ) -> Result<()> {
     require!(token_amount > 0, DuelError::InsufficientTokenBalance);
 
-    let market = &ctx.accounts.market;
+    // Activate re-entrancy lock
+    let market = &mut ctx.accounts.market;
+    market.locked = true;
+
     let side_account = &ctx.accounts.side_account;
 
-    // Calculate quote out (no penalty post-resolution)
+    // Calculate quote out using default curve params (no trade fees on emergency sells)
+    let params = CurveParams::default_params();
     let quote_amount = bonding_curve::sol_out(
         token_amount,
         side_account.circulating_supply,
-        &market.curve_params,
+        &params,
     )?;
 
     // Slippage check
@@ -98,7 +103,7 @@ pub fn handler(
     let vault_balance = ctx.accounts.quote_vault.amount;
     require!(vault_balance >= quote_amount, DuelError::InsufficientReserve);
 
-    // Extract signer seed values (immutable borrow)
+    // Extract signer seed values
     let market_id_bytes = ctx.accounts.market.market_id.to_le_bytes();
     let bump = ctx.accounts.market.bump;
     let authority_key = ctx.accounts.market.authority;
@@ -109,7 +114,7 @@ pub fn handler(
         &[bump],
     ]];
 
-    // Transfer tokens from seller to vault (transfer_checked for Token-2022 compat)
+    // Transfer tokens from seller to vault
     let decimals = ctx.accounts.token_mint.decimals;
 
     token_interface::transfer_checked(
@@ -152,9 +157,8 @@ pub fn handler(
         .ok_or(DuelError::MathOverflow)?;
 
     // Calculate new price for event
-    let market = &ctx.accounts.market;
-    let new_price = bonding_curve::price(side_account.circulating_supply, &market.curve_params)?;
-    let market_key = market.key();
+    let new_price = bonding_curve::price(side_account.circulating_supply, &params)?;
+    let market_key = ctx.accounts.market.key();
 
     emit!(TokensSold {
         market: market_key,
@@ -162,9 +166,12 @@ pub fn handler(
         seller: ctx.accounts.seller.key(),
         token_amount,
         quote_received: quote_amount,
-        penalty_applied: 0,
+        fee_amount: 0,
         new_price,
     });
+
+    // Release re-entrancy lock
+    ctx.accounts.market.locked = false;
 
     Ok(())
 }

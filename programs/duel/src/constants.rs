@@ -1,35 +1,27 @@
-/// Max battle tax: 100% (10000 bps)
-pub const MAX_BATTLE_TAX_BPS: u16 = 10_000;
+// Token economics (hardcoded, not configurable)
+pub const TOTAL_SUPPLY_PER_SIDE: u64 = 1_000_000_000; // 1B tokens per side
+pub const TOKEN_DECIMALS: u8 = 0; // Whole tokens only
 
-/// Max protocol fee: 5% (500 bps)
-pub const MAX_PROTOCOL_FEE_BPS: u16 = 500;
+// Bonding curve: price(k) = CURVE_A * k^CURVE_N / CURVE_SCALE + CURVE_B
+pub const CURVE_A: u64 = 1;
+pub const CURVE_N: u8 = 2; // Quadratic
+pub const CURVE_B: u64 = 1; // 1 lamport base price
+pub const CURVE_SCALE: u128 = 1_000_000_000; // 10^9
 
-/// Max sell penalty: 30% (3000 bps)
-pub const MAX_SELL_PENALTY_BPS: u16 = 3_000;
-
-/// Minimum TWAP sampling interval in seconds
-pub const MIN_TWAP_INTERVAL: u64 = 10;
-
-/// Maximum TWAP sampling interval in seconds
-pub const MAX_TWAP_INTERVAL: u64 = 300;
-
-/// Base sell fee in basis points (1%)
-pub const BASE_SELL_FEE_BPS: u16 = 100;
-
-/// Basis points denominator
+// Fees (defaults, adjustable via ProgramConfig)
+pub const DEFAULT_TRADE_FEE_BPS: u16 = 100; // 1% on every buy/sell
+pub const DEFAULT_CREATOR_FEE_SPLIT_BPS: u16 = 5_000; // 50% of trade fee to creator
+pub const MAX_TRADE_FEE_BPS: u16 = 500; // 5% max trade fee
 pub const BPS_DENOMINATOR: u64 = 10_000;
 
-/// Scaling factor for curve parameter a (10^9)
-pub const CURVE_SCALE: u128 = 1_000_000_000;
+// TWAP
+pub const MIN_TWAP_INTERVAL: u64 = 10; // 10 seconds minimum
+pub const MAX_TWAP_INTERVAL: u64 = 300; // 5 minutes maximum
 
-/// Minimum curve exponent
-pub const MIN_CURVE_EXPONENT: u8 = 1;
+// Market
+pub const MIN_MARKET_DURATION: u64 = 10; // 10 seconds minimum
+pub const DEFAULT_EMERGENCY_WINDOW: u64 = 86_400; // 24 hours after deadline
 
-/// Maximum curve exponent
-pub const MAX_CURVE_EXPONENT: u8 = 3;
-
-/// Minimum market duration in seconds (10 seconds)
-pub const MIN_MARKET_DURATION: u64 = 10;
-
-/// Default emergency resolution window (24 hours after deadline)
-pub const DEFAULT_EMERGENCY_WINDOW: u64 = 86_400;
+// Graduation
+pub const MIN_GRADUATION_RESERVE: u64 = 100_000_000; // 0.1 SOL minimum to graduate
+pub const GRADUATION_POOL_FEE_BPS: u16 = 25; // 0.25% Meteora pool trading fee

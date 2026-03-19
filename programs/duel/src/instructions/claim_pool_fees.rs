@@ -7,7 +7,6 @@ use crate::errors::DuelError;
 use crate::state::*;
 
 #[derive(Accounts)]
-#[instruction(side: u8)]
 pub struct ClaimPoolFees<'info> {
     /// Market creator or protocol admin
     #[account(mut)]
@@ -15,6 +14,7 @@ pub struct ClaimPoolFees<'info> {
 
     #[account(
         constraint = market.status == MarketStatus::Resolved @ DuelError::MarketNotResolved,
+        constraint = market.winner.is_some() @ DuelError::EmergencyOnlyOperation,
         constraint = market.authority == authority.key() || config.admin == authority.key() @ DuelError::InvalidMarketConfig,
     )]
     pub market: Box<Account<'info, Market>>,
@@ -26,21 +26,15 @@ pub struct ClaimPoolFees<'info> {
     )]
     pub config: Account<'info, ProgramConfig>,
 
-    /// Side account being claimed for
-    #[account(
-        constraint = side_account.market == market.key() @ DuelError::InvalidSide,
-    )]
-    pub side_account: Account<'info, Side>,
-
-    /// Token mint for this side
-    /// CHECK: Validated via side_account
+    /// Token mint for the winning side
+    /// CHECK: Validated via Meteora program
     pub token_mint: UncheckedAccount<'info>,
 
     /// WSOL mint
     /// CHECK: Validated by Meteora program
     pub wsol_mint: UncheckedAccount<'info>,
 
-    // ─── Meteora DAMM v2 accounts ────
+    // ---- Meteora DAMM v2 accounts ----
 
     /// Pool authority (const PDA of DAMM v2)
     /// CHECK: Validated against known address
@@ -102,14 +96,8 @@ pub struct ClaimPoolFees<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 }
 
-pub fn handler(ctx: Context<ClaimPoolFees>, side: u8) -> Result<()> {
-    require!(side <= 1, DuelError::InvalidSide);
-
+pub fn handler(ctx: Context<ClaimPoolFees>) -> Result<()> {
     let market = &ctx.accounts.market;
-
-    // Side must be graduated (pool must exist)
-    let graduated = if side == 0 { market.graduated_a } else { market.graduated_b };
-    require!(graduated, DuelError::NotGraduated);
 
     // Build market PDA signer seeds (market PDA is the position NFT owner)
     let authority_key = market.authority;

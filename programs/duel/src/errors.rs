@@ -26,38 +26,22 @@ pub enum DuelError {
     SlippageExceeded,
     #[msg("Invalid side index")]
     InvalidSide,
-    #[msg("Invalid curve parameters")]
-    InvalidCurveParams,
     #[msg("Invalid market configuration")]
     InvalidMarketConfig,
     #[msg("Math overflow")]
     MathOverflow,
-    #[msg("Side already graduated to DEX")]
-    AlreadyGraduated,
-    #[msg("Insufficient reserve for DEX graduation")]
-    InsufficientReserveForGraduation,
-    #[msg("Side must be graduated before vault closure")]
-    NotGraduated,
-    #[msg("LP is permanently locked, cannot remove liquidity or close position")]
-    LpLocked,
     #[msg("Protocol is paused")]
     ProtocolPaused,
-    #[msg("TWAP spread below minimum threshold, resolved as draw")]
-    DrawResult,
     #[msg("Invalid fee configuration")]
     InvalidFeeConfig,
-    #[msg("Oracle resolution not allowed for this market")]
-    OracleNotAllowed,
-    #[msg("TWAP resolution not allowed for this market (oracle-only mode)")]
-    TwapNotAllowed,
-    #[msg("Oracle dispute window has not expired yet")]
-    OracleDisputeWindowActive,
-    #[msg("Unauthorized oracle authority")]
-    UnauthorizedOracle,
-    #[msg("Invalid winning side (must be 0 or 1)")]
-    InvalidWinningSide,
     #[msg("Market is currently locked (re-entrancy protection)")]
     ReentrancyLocked,
     #[msg("Emergency resolution window has not passed yet")]
     EmergencyResolveTooEarly,
+    #[msg("Expected winner does not match TWAP result")]
+    WinnerMismatch,
+    #[msg("This operation is only available for emergency-resolved (draw) markets")]
+    EmergencyOnlyOperation,
+    #[msg("Insufficient reserve for DEX graduation (minimum 0.1 SOL)")]
+    InsufficientReserveForGraduation,
 }

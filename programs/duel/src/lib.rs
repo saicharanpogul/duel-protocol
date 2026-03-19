@@ -19,20 +19,22 @@ pub mod duel {
 
     pub fn initialize_config(
         ctx: Context<InitializeConfig>,
-        default_protocol_fee_bps: u16,
+        trade_fee_bps: u16,
+        creator_fee_split_bps: u16,
         market_creation_fee: u64,
     ) -> Result<()> {
-        instructions::initialize_config::handler(ctx, default_protocol_fee_bps, market_creation_fee)
+        instructions::initialize_config::handler(ctx, trade_fee_bps, creator_fee_split_bps, market_creation_fee)
     }
 
     pub fn update_config(
         ctx: Context<UpdateConfig>,
         paused: Option<bool>,
-        default_protocol_fee_bps: Option<u16>,
+        trade_fee_bps: Option<u16>,
+        creator_fee_split_bps: Option<u16>,
         market_creation_fee: Option<u64>,
         min_market_duration: Option<u64>,
     ) -> Result<()> {
-        instructions::update_config::handler(ctx, paused, default_protocol_fee_bps, market_creation_fee, min_market_duration)
+        instructions::update_config::handler(ctx, paused, trade_fee_bps, creator_fee_split_bps, market_creation_fee, min_market_duration)
     }
 
     pub fn initialize_market(
@@ -41,25 +43,12 @@ pub mod duel {
         deadline: i64,
         twap_window: u64,
         twap_interval: u64,
-        battle_tax_bps: u16,
-        protocol_fee_bps: u16,
-        sell_penalty_max_bps: u16,
-        protection_activation_offset: u64,
-        curve_params: state::CurveParams,
-        total_supply_per_side: u64,
         name_a: String,
         symbol_a: String,
         uri_a: String,
         name_b: String,
         symbol_b: String,
         uri_b: String,
-        lp_lock_mode: state::LpLockMode,
-        max_observation_change_per_update: u64,
-        min_twap_spread_bps: u16,
-        creator_fee_bps: u16,
-        resolution_mode: state::ResolutionMode,
-        oracle_authority: Pubkey,
-        oracle_dispute_window: u64,
     ) -> Result<()> {
         instructions::initialize_market::handler(
             ctx,
@@ -67,75 +56,51 @@ pub mod duel {
             deadline,
             twap_window,
             twap_interval,
-            battle_tax_bps,
-            protocol_fee_bps,
-            sell_penalty_max_bps,
-            protection_activation_offset,
-            curve_params,
-            total_supply_per_side,
             name_a,
             symbol_a,
             uri_a,
             name_b,
             symbol_b,
             uri_b,
-            lp_lock_mode,
-            max_observation_change_per_update,
-            min_twap_spread_bps,
-            creator_fee_bps,
-            resolution_mode,
-            oracle_authority,
-            oracle_dispute_window,
         )
     }
 
     pub fn buy_tokens(
         ctx: Context<BuyTokens>,
         side: u8,
-        sol_amount: u64,
+        quote_amount: u64,
         min_tokens_out: u64,
     ) -> Result<()> {
-        instructions::buy_tokens::handler(ctx, side, sol_amount, min_tokens_out)
+        instructions::buy_tokens::handler(ctx, side, quote_amount, min_tokens_out)
     }
 
     pub fn sell_tokens(
         ctx: Context<SellTokens>,
         side: u8,
         token_amount: u64,
-        min_sol_out: u64,
+        min_quote_out: u64,
     ) -> Result<()> {
-        instructions::sell_tokens::handler(ctx, side, token_amount, min_sol_out)
+        instructions::sell_tokens::handler(ctx, side, token_amount, min_quote_out)
     }
 
     pub fn record_twap_sample(ctx: Context<RecordTwapSample>) -> Result<()> {
         instructions::record_twap_sample::handler(ctx)
     }
 
-    pub fn resolve_market(ctx: Context<ResolveMarket>) -> Result<()> {
-        instructions::resolve_market::handler(ctx)
-    }
-
-    pub fn resolve_with_oracle(
-        ctx: Context<ResolveWithOracle>,
-        winning_side: u8,
+    pub fn resolve_and_graduate(
+        ctx: Context<ResolveAndGraduate>,
+        expected_winner: u8,
     ) -> Result<()> {
-        instructions::resolve_with_oracle::handler(ctx, winning_side)
+        instructions::resolve_and_graduate::handler(ctx, expected_winner)
     }
 
     pub fn sell_post_resolution(
         ctx: Context<SellPostResolution>,
         side: u8,
         token_amount: u64,
-        min_sol_out: u64,
+        min_quote_out: u64,
     ) -> Result<()> {
-        instructions::sell_post_resolution::handler(ctx, side, token_amount, min_sol_out)
-    }
-
-    pub fn graduate_to_dex(
-        ctx: Context<GraduateToDex>,
-        side: u8,
-    ) -> Result<()> {
-        instructions::graduate_to_dex::handler(ctx, side)
+        instructions::sell_post_resolution::handler(ctx, side, token_amount, min_quote_out)
     }
 
     pub fn close_quote_vault(
@@ -147,34 +112,8 @@ pub mod duel {
 
     pub fn claim_pool_fees(
         ctx: Context<ClaimPoolFees>,
-        side: u8,
     ) -> Result<()> {
-        instructions::claim_pool_fees::handler(ctx, side)
-    }
-
-    pub fn lock_position(
-        ctx: Context<LockPosition>,
-        side: u8,
-        lock_liquidity: u128,
-    ) -> Result<()> {
-        instructions::lock_position::handler(ctx, side, lock_liquidity)
-    }
-
-    pub fn remove_liquidity(
-        ctx: Context<RemoveLiquidity>,
-        side: u8,
-        liquidity_delta: u128,
-        min_token_a: u64,
-        min_token_b: u64,
-    ) -> Result<()> {
-        instructions::remove_liquidity::handler(ctx, side, liquidity_delta, min_token_a, min_token_b)
-    }
-
-    pub fn close_position(
-        ctx: Context<ClosePosition>,
-        side: u8,
-    ) -> Result<()> {
-        instructions::close_position::handler(ctx, side)
+        instructions::claim_pool_fees::handler(ctx)
     }
 
     pub fn close_market(

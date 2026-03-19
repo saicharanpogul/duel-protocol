@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{self, TokenAccount, TokenInterface, TransferChecked, Mint};
 
+use crate::constants::*;
 use crate::errors::DuelError;
 use crate::events::TokensBought;
 use crate::math::bonding_curve;
@@ -15,16 +16,15 @@ pub struct BuyTokens<'info> {
     #[account(
         mut,
         constraint = market.status != MarketStatus::Resolved @ DuelError::MarketAlreadyResolved,
-        constraint = !market.locked @ DuelError::MarketAlreadyResolved,
     )]
-    pub market: Account<'info, Market>,
+    pub market: Box<Account<'info, Market>>,
 
     #[account(
         mut,
         constraint = side_account.market == market.key() @ DuelError::InvalidSide,
         constraint = side_account.side_index == side @ DuelError::InvalidSide,
     )]
-    pub side_account: Account<'info, Side>,
+    pub side_account: Box<Account<'info, Side>>,
 
     /// Token mint for the selected side (needed for transfer_checked)
     #[account(
@@ -43,7 +43,7 @@ pub struct BuyTokens<'info> {
     #[account(mut)]
     pub buyer_token_account: InterfaceAccount<'info, TokenAccount>,
 
-    /// Quote token mint (WSOL, USDC, etc.)
+    /// Quote token mint (WSOL)
     #[account(
         constraint = quote_mint.key() == market.quote_mint @ DuelError::InvalidMarketConfig,
     )]
@@ -56,17 +56,31 @@ pub struct BuyTokens<'info> {
     )]
     pub quote_vault: InterfaceAccount<'info, TokenAccount>,
 
-    /// Buyer's quote token account (WSOL ATA, USDC ATA, etc.)
+    /// Buyer's quote token account (WSOL ATA)
     #[account(mut)]
     pub buyer_quote_account: InterfaceAccount<'info, TokenAccount>,
 
-    /// Protocol config (pause check)
+    /// Protocol fee recipient (WSOL token account)
+    #[account(
+        mut,
+        constraint = protocol_fee_account.key() == config.protocol_fee_account @ DuelError::InvalidFeeConfig,
+    )]
+    pub protocol_fee_account: InterfaceAccount<'info, TokenAccount>,
+
+    /// Creator fee recipient (WSOL token account)
+    #[account(
+        mut,
+        constraint = creator_fee_account.key() == market.creator_fee_account @ DuelError::InvalidFeeConfig,
+    )]
+    pub creator_fee_account: InterfaceAccount<'info, TokenAccount>,
+
+    /// Protocol config (pause check + fee rates)
     #[account(
         seeds = [b"config"],
         bump = config.bump,
         constraint = !config.paused @ DuelError::ProtocolPaused,
     )]
-    pub config: Account<'info, ProgramConfig>,
+    pub config: Box<Account<'info, ProgramConfig>>,
 
     pub token_program: Interface<'info, TokenInterface>,
     /// Quote token program (may differ for Token-2022)
@@ -91,21 +105,43 @@ pub fn handler(
     require!(!market.locked, DuelError::ReentrancyLocked);
     market.locked = true;
 
-    let side_account = &ctx.accounts.side_account;
+    // Calculate trade fees
+    let config = &ctx.accounts.config;
+    let trade_fee = (quote_amount as u128)
+        .checked_mul(config.trade_fee_bps as u128)
+        .ok_or(DuelError::MathOverflow)?
+        .checked_div(BPS_DENOMINATOR as u128)
+        .ok_or(DuelError::MathOverflow)? as u64;
 
-    // Calculate tokens out (bonding curve math uses quote amount)
+    let creator_fee = (trade_fee as u128)
+        .checked_mul(config.creator_fee_split_bps as u128)
+        .ok_or(DuelError::MathOverflow)?
+        .checked_div(BPS_DENOMINATOR as u128)
+        .ok_or(DuelError::MathOverflow)? as u64;
+
+    let protocol_fee = trade_fee
+        .checked_sub(creator_fee)
+        .ok_or(DuelError::MathOverflow)?;
+
+    let net_quote = quote_amount
+        .checked_sub(trade_fee)
+        .ok_or(DuelError::MathOverflow)?;
+
+    // Calculate tokens out using bonding curve with net quote amount
+    let params = CurveParams::default_params();
+    let side_account = &ctx.accounts.side_account;
     let tokens = bonding_curve::tokens_out(
-        quote_amount,
+        net_quote,
         side_account.circulating_supply,
         side_account.total_supply,
-        &market.curve_params,
+        &params,
     )?;
 
     // Slippage check
     require!(tokens >= min_tokens_out, DuelError::SlippageExceeded);
     require!(tokens > 0, DuelError::InsufficientSolAmount);
 
-    // Extract signer seed values (immutable borrow)
+    // Extract signer seed values
     let market_id_bytes = ctx.accounts.market.market_id.to_le_bytes();
     let bump = ctx.accounts.market.bump;
     let authority_key = ctx.accounts.market.authority;
@@ -116,8 +152,9 @@ pub fn handler(
         &[bump],
     ]];
 
-    // Transfer quote tokens from buyer to quote vault
     let quote_decimals = ctx.accounts.quote_mint.decimals;
+
+    // Transfer net_quote from buyer to quote vault
     token_interface::transfer_checked(
         CpiContext::new(
             ctx.accounts.quote_token_program.to_account_info(),
@@ -128,9 +165,43 @@ pub fn handler(
                 authority: ctx.accounts.buyer.to_account_info(),
             },
         ),
-        quote_amount,
+        net_quote,
         quote_decimals,
     )?;
+
+    // Transfer protocol fee from buyer to protocol fee account
+    if protocol_fee > 0 {
+        token_interface::transfer_checked(
+            CpiContext::new(
+                ctx.accounts.quote_token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.buyer_quote_account.to_account_info(),
+                    mint: ctx.accounts.quote_mint.to_account_info(),
+                    to: ctx.accounts.protocol_fee_account.to_account_info(),
+                    authority: ctx.accounts.buyer.to_account_info(),
+                },
+            ),
+            protocol_fee,
+            quote_decimals,
+        )?;
+    }
+
+    // Transfer creator fee from buyer to creator fee account
+    if creator_fee > 0 {
+        token_interface::transfer_checked(
+            CpiContext::new(
+                ctx.accounts.quote_token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.buyer_quote_account.to_account_info(),
+                    mint: ctx.accounts.quote_mint.to_account_info(),
+                    to: ctx.accounts.creator_fee_account.to_account_info(),
+                    authority: ctx.accounts.buyer.to_account_info(),
+                },
+            ),
+            creator_fee,
+            quote_decimals,
+        )?;
+    }
 
     // Transfer tokens from vault to buyer (Market PDA signs)
     let decimals = ctx.accounts.token_mint.decimals;
@@ -157,17 +228,9 @@ pub fn handler(
         .checked_add(tokens)
         .ok_or(DuelError::MathOverflow)?;
 
-    // Update peak reserve (use token account amount)
-    ctx.accounts.quote_vault.reload()?;
-    let new_reserve = ctx.accounts.quote_vault.amount;
-    if new_reserve > side_account.peak_reserve {
-        side_account.peak_reserve = new_reserve;
-    }
-
     // Calculate new price for event
-    let market = &ctx.accounts.market;
-    let new_price = bonding_curve::price(side_account.circulating_supply, &market.curve_params)?;
-    let market_key = market.key();
+    let new_price = bonding_curve::price(side_account.circulating_supply, &params)?;
+    let market_key = ctx.accounts.market.key();
 
     emit!(TokensBought {
         market: market_key,
@@ -175,6 +238,7 @@ pub fn handler(
         buyer: ctx.accounts.buyer.key(),
         quote_amount,
         tokens_received: tokens,
+        fee_amount: trade_fee,
         new_price,
     });
 

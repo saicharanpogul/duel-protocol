@@ -44,7 +44,7 @@ pub struct InitializeMarket<'info> {
     #[account(
         init,
         payer = creator,
-        mint::decimals = 6,
+        mint::decimals = TOKEN_DECIMALS,
         mint::authority = market,
         mint::token_program = token_program,
         seeds = [b"mint", market.key().as_ref(), &[0u8]],
@@ -55,7 +55,7 @@ pub struct InitializeMarket<'info> {
     #[account(
         init,
         payer = creator,
-        mint::decimals = 6,
+        mint::decimals = TOKEN_DECIMALS,
         mint::authority = market,
         mint::token_program = token_program,
         seeds = [b"mint", market.key().as_ref(), &[1u8]],
@@ -85,7 +85,7 @@ pub struct InitializeMarket<'info> {
     )]
     pub token_vault_b: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// Quote token mint (WSOL, USDC, etc.)
+    /// Quote token mint (WSOL)
     pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// Quote token program (may differ from side token program for Token-2022)
@@ -116,7 +116,6 @@ pub struct InitializeMarket<'info> {
     pub quote_vault_b: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// CHECK: Validated against config.protocol_fee_account
-    /// Protocol fee recipient — must match config
     #[account(
         constraint = protocol_fee_account.key() == config.protocol_fee_account @ DuelError::InvalidFeeConfig,
     )]
@@ -157,8 +156,8 @@ pub struct InitializeMarket<'info> {
     )]
     pub token_metadata_program: UncheckedAccount<'info>,
 
-    /// Creator fee recipient — must be a valid account
-    /// CHECK: Stored on market, validated at resolution time
+    /// Creator fee recipient -- must be a valid account
+    /// CHECK: Stored on market, validated at trade time
     #[account(
         constraint = creator_fee_account.key() != Pubkey::default() @ DuelError::InvalidFeeConfig,
     )]
@@ -175,25 +174,12 @@ pub fn handler(
     deadline: i64,
     twap_window: u64,
     twap_interval: u64,
-    battle_tax_bps: u16,
-    protocol_fee_bps: u16,
-    sell_penalty_max_bps: u16,
-    protection_activation_offset: u64,
-    curve_params: CurveParams,
-    total_supply_per_side: u64,
     name_a: String,
     symbol_a: String,
     uri_a: String,
     name_b: String,
     symbol_b: String,
     uri_b: String,
-    lp_lock_mode: LpLockMode,
-    max_observation_change_per_update: u64,
-    min_twap_spread_bps: u16,
-    creator_fee_bps: u16,
-    resolution_mode: ResolutionMode,
-    oracle_authority: Pubkey,
-    oracle_dispute_window: u64,
 ) -> Result<()> {
     let clock = Clock::get()?;
     let now = clock.unix_timestamp;
@@ -201,7 +187,10 @@ pub fn handler(
     // Validation
     require!(deadline > now, DuelError::InvalidMarketConfig);
     let duration = (deadline - now) as u64;
-    require!(duration >= ctx.accounts.config.min_market_duration, DuelError::InvalidMarketConfig);
+    require!(
+        duration >= ctx.accounts.config.min_market_duration,
+        DuelError::InvalidMarketConfig
+    );
     require!(
         twap_window > 0 && twap_window < duration,
         DuelError::InvalidMarketConfig
@@ -210,38 +199,6 @@ pub fn handler(
         twap_interval >= MIN_TWAP_INTERVAL && twap_interval <= MAX_TWAP_INTERVAL,
         DuelError::InvalidMarketConfig
     );
-    require!(battle_tax_bps <= MAX_BATTLE_TAX_BPS, DuelError::InvalidMarketConfig);
-    require!(protocol_fee_bps <= MAX_PROTOCOL_FEE_BPS, DuelError::InvalidMarketConfig);
-    require!(
-        sell_penalty_max_bps <= MAX_SELL_PENALTY_BPS,
-        DuelError::InvalidMarketConfig
-    );
-    require!(
-        protection_activation_offset <= ((deadline - now) as u64),
-        DuelError::InvalidMarketConfig
-    );
-    require!(curve_params.a > 0, DuelError::InvalidCurveParams);
-    require!(
-        curve_params.n >= MIN_CURVE_EXPONENT && curve_params.n <= MAX_CURVE_EXPONENT,
-        DuelError::InvalidCurveParams
-    );
-    require!(curve_params.b > 0, DuelError::InvalidCurveParams);
-    require!(total_supply_per_side > 0, DuelError::InvalidMarketConfig);
-    // Creator + protocol fee cannot exceed 25% of transfer
-    require!(
-        (creator_fee_bps as u32) + (protocol_fee_bps as u32) <= 2500,
-        DuelError::InvalidFeeConfig
-    );
-    // Validate oracle params
-    if resolution_mode != ResolutionMode::Twap {
-        require!(
-            oracle_authority != Pubkey::default(),
-            DuelError::InvalidMarketConfig
-        );
-    }
-    if resolution_mode == ResolutionMode::OracleWithTwapFallback {
-        require!(oracle_dispute_window > 0, DuelError::InvalidMarketConfig);
-    }
 
     // Charge market creation fee if configured
     let creation_fee = ctx.accounts.config.market_creation_fee;
@@ -263,6 +220,8 @@ pub fn handler(
     let side_b = &mut ctx.accounts.side_b;
 
     // Initialize market state
+    market.version = 1;
+    market.bump = ctx.bumps.market;
     market.authority = ctx.accounts.creator.key();
     market.market_id = market_id;
     market.side_a = side_a.key();
@@ -271,35 +230,17 @@ pub fn handler(
     market.deadline = deadline;
     market.twap_window = twap_window;
     market.twap_interval = twap_interval;
-    market.battle_tax_bps = battle_tax_bps;
-    market.protocol_fee_bps = protocol_fee_bps;
-    market.sell_penalty_max_bps = sell_penalty_max_bps;
-    market.protection_activation_offset = protection_activation_offset;
-    market.curve_params = curve_params;
-    market.max_observation_change_per_update = max_observation_change_per_update;
-    market.min_twap_spread_bps = min_twap_spread_bps;
-    market.creator_fee_bps = creator_fee_bps;
     market.creator_fee_account = ctx.accounts.creator_fee_account.key();
+    market.protocol_fee_account = ctx.accounts.protocol_fee_account.key();
     market.status = MarketStatus::Active;
     market.twap_samples_count = 0;
     market.last_sample_ts = 0;
     market.winner = None;
     market.final_twap_a = 0;
     market.final_twap_b = 0;
-    market.protocol_fee_account = ctx.accounts.protocol_fee_account.key();
-    market.graduated_a = false;
-    market.graduated_b = false;
-    market.lp_lock_mode = lp_lock_mode;
-    market.resolution_mode = resolution_mode;
-    market.oracle_authority = oracle_authority;
-    market.oracle_dispute_window = oracle_dispute_window;
-    market.emergency_window = if oracle_dispute_window > 0 {
-        oracle_dispute_window.max(DEFAULT_EMERGENCY_WINDOW)
-    } else {
-        DEFAULT_EMERGENCY_WINDOW
-    };
+    market.emergency_window = DEFAULT_EMERGENCY_WINDOW;
     market.locked = false;
-    market.bump = ctx.bumps.market;
+    market._reserved = [0u8; 128];
 
     // Initialize Side A
     side_a.market = market.key();
@@ -307,13 +248,11 @@ pub fn handler(
     side_a.token_mint = ctx.accounts.token_mint_a.key();
     side_a.token_reserve_vault = ctx.accounts.token_vault_a.key();
     side_a.quote_reserve_vault = ctx.accounts.quote_vault_a.key();
-    side_a.total_supply = total_supply_per_side;
+    side_a.total_supply = TOTAL_SUPPLY_PER_SIDE;
     side_a.circulating_supply = 0;
-    side_a.peak_reserve = 0;
     side_a.twap_accumulator = 0;
-    side_a.last_observation = 0;
-    side_a.penalty_accumulated = 0;
     side_a.bump = ctx.bumps.side_a;
+    side_a._reserved = [0u8; 32];
 
     // Initialize Side B
     side_b.market = market.key();
@@ -321,13 +260,11 @@ pub fn handler(
     side_b.token_mint = ctx.accounts.token_mint_b.key();
     side_b.token_reserve_vault = ctx.accounts.token_vault_b.key();
     side_b.quote_reserve_vault = ctx.accounts.quote_vault_b.key();
-    side_b.total_supply = total_supply_per_side;
+    side_b.total_supply = TOTAL_SUPPLY_PER_SIDE;
     side_b.circulating_supply = 0;
-    side_b.peak_reserve = 0;
     side_b.twap_accumulator = 0;
-    side_b.last_observation = 0;
-    side_b.penalty_accumulated = 0;
     side_b.bump = ctx.bumps.side_b;
+    side_b._reserved = [0u8; 32];
 
     // Mint total supply into each token vault
     let market_key = market.key();
@@ -351,7 +288,7 @@ pub fn handler(
             },
             signer_seeds,
         ),
-        total_supply_per_side,
+        TOTAL_SUPPLY_PER_SIDE,
     )?;
 
     // Mint Side B tokens
@@ -365,7 +302,7 @@ pub fn handler(
             },
             signer_seeds,
         ),
-        total_supply_per_side,
+        TOTAL_SUPPLY_PER_SIDE,
     )?;
 
     // Create Metaplex metadata for Side A
@@ -404,7 +341,6 @@ pub fn handler(
         market: market_key,
         authority: ctx.accounts.creator.key(),
         deadline,
-        battle_tax_bps,
         market_id,
         quote_mint: ctx.accounts.quote_mint.key(),
     });

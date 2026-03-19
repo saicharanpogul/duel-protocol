@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::errors::DuelError;
+use crate::events::MarketClosed;
 use crate::state::*;
 
 #[derive(Accounts)]
@@ -46,8 +47,14 @@ pub struct CloseMarket<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(_ctx: Context<CloseMarket>, _side: u8) -> Result<()> {
+pub fn handler(ctx: Context<CloseMarket>, _side: u8) -> Result<()> {
     // All validation is in account constraints.
     // Anchor's `close = authority` handles rent recovery.
+
+    emit!(MarketClosed {
+        market: ctx.accounts.market.key(),
+        authority: ctx.accounts.authority.key(),
+    });
+
     Ok(())
 }

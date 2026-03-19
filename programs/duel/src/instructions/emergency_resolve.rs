@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::errors::DuelError;
 use crate::events::EmergencyResolved;
-use crate::state::{Market, MarketStatus, Side, ProgramConfig};
+use crate::state::{Market, MarketStatus, ProgramConfig, Side};
 
 #[derive(Accounts)]
 pub struct EmergencyResolve<'info> {
@@ -38,10 +38,10 @@ pub struct EmergencyResolve<'info> {
     pub side_b: Account<'info, Side>,
 }
 
-/// Emergency resolution — draw fallback when TWAP cranking fails.
+/// Emergency resolution -- draw fallback when TWAP cranking fails.
 ///
 /// If `deadline + emergency_window` has passed and the market is still unresolved,
-/// anyone can call this to resolve as a draw. No battle tax is transferred.
+/// anyone can call this to resolve as a draw (winner = None).
 /// Users can then sell their tokens at bonding curve rate via sell_post_resolution.
 pub fn handler(ctx: Context<EmergencyResolve>) -> Result<()> {
     let clock = Clock::get()?;
@@ -57,7 +57,7 @@ pub fn handler(ctx: Context<EmergencyResolve>) -> Result<()> {
         .ok_or(DuelError::MathOverflow)?;
     require!(now >= emergency_deadline, DuelError::EmergencyResolveTooEarly);
 
-    // Resolve as draw — no winner, no battle tax
+    // Resolve as draw -- no winner, no battle tax
     let market = &mut ctx.accounts.market;
     market.status = MarketStatus::Resolved;
     market.winner = None; // Draw

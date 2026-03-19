@@ -7,7 +7,7 @@ use crate::state::*;
 #[derive(Accounts)]
 #[instruction(side: u8)]
 pub struct CloseQuoteVault<'info> {
-    /// Anyone can close — rent goes to rent_receiver
+    /// Anyone can close -- rent goes to rent_receiver
     #[account(mut)]
     pub closer: Signer<'info>,
 
@@ -29,7 +29,7 @@ pub struct CloseQuoteVault<'info> {
     )]
     pub quote_vault: InterfaceAccount<'info, TokenAccount>,
 
-    /// Token vault to close (optional — only if empty)
+    /// Token vault to close (optional -- only if empty)
     #[account(
         mut,
         constraint = token_vault.key() == side_account.token_reserve_vault @ DuelError::InvalidSide,
@@ -49,7 +49,6 @@ pub struct CloseQuoteVault<'info> {
 pub fn handler(ctx: Context<CloseQuoteVault>, side: u8) -> Result<()> {
     require!(side <= 1, DuelError::InvalidSide);
 
-    // Can close vaults if side is graduated OR if vault is already empty (covers losing side)
     let market = &ctx.accounts.market;
 
     // Build market PDA signer seeds

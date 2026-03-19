@@ -1,7 +1,5 @@
 use anchor_lang::prelude::*;
 
-use super::CurveParams;
-
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Debug)]
 pub enum MarketStatus {
     Active,
@@ -9,29 +7,12 @@ pub enum MarketStatus {
     Resolved,
 }
 
-/// LP lock mode — configurable at market creation.
-/// Determines whether LP liquidity can be withdrawn after graduation.
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
-pub enum LpLockMode {
-    /// LP can be withdrawn via remove_liquidity + close_position
-    Unlocked = 0,
-    /// LP is permanently locked at graduation — only fees are claimable
-    PermanentLock = 1,
-}
-
-/// Resolution mode — determines how a market outcome is decided.
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
-pub enum ResolutionMode {
-    /// Pure TWAP resolution (default for subjective markets)
-    Twap = 0,
-    /// Oracle-only resolution (oracle_authority must submit outcome)
-    Oracle = 1,
-    /// Oracle preferred, TWAP fallback after dispute window expires
-    OracleWithTwapFallback = 2,
-}
-
 #[account]
 pub struct Market {
+    /// Account version for future upgrades
+    pub version: u8,
+    /// PDA bump
+    pub bump: u8,
     /// Market creator
     pub authority: Pubkey,
     /// Unique ID per creator
@@ -40,7 +21,7 @@ pub struct Market {
     pub side_a: Pubkey,
     /// Side B PDA
     pub side_b: Pubkey,
-    /// Quote token mint (WSOL, USDC, etc.)
+    /// Quote token mint (WSOL)
     pub quote_mint: Pubkey,
     /// Unix timestamp deadline
     pub deadline: i64,
@@ -48,60 +29,34 @@ pub struct Market {
     pub twap_window: u64,
     /// TWAP sampling interval in seconds
     pub twap_interval: u64,
-    /// Battle tax in basis points (0-10000)
-    pub battle_tax_bps: u16,
-    /// Protocol fee in basis points (0-500)
-    pub protocol_fee_bps: u16,
-    /// Max sell penalty in basis points (0-3000)
-    pub sell_penalty_max_bps: u16,
-    /// Seconds before deadline when sell penalty activates
-    pub protection_activation_offset: u64,
-    /// Bonding curve parameters
-    pub curve_params: CurveParams,
-    /// Max observation change per TWAP update (0 = raw price, >0 = lagging filter)
-    pub max_observation_change_per_update: u64,
-    /// Min TWAP spread in bps to determine winner (0 = any difference, >0 = draw if below)
-    pub min_twap_spread_bps: u16,
-    /// Creator fee in basis points (deducted from transfer before protocol fee)
-    pub creator_fee_bps: u16,
     /// Creator fee recipient
     pub creator_fee_account: Pubkey,
+    /// Protocol fee recipient
+    pub protocol_fee_account: Pubkey,
     /// Current market status
     pub status: MarketStatus,
     /// Number of TWAP samples recorded
     pub twap_samples_count: u32,
     /// Timestamp of last TWAP sample
     pub last_sample_ts: i64,
-    /// Winner side index (0 = A, 1 = B), None if not resolved or draw
+    /// Winner side index (0 = A, 1 = B), None if not resolved or emergency draw
     pub winner: Option<u8>,
-    /// Final TWAP for side A (quote token units, price * 10^9 for precision)
+    /// Final TWAP for side A
     pub final_twap_a: u64,
     /// Final TWAP for side B
     pub final_twap_b: u64,
-    /// Protocol fee recipient
-    pub protocol_fee_account: Pubkey,
-    /// Whether Side A has graduated to DEX
-    pub graduated_a: bool,
-    /// Whether Side B has graduated to DEX
-    pub graduated_b: bool,
-    /// LP lock mode (set at creation, governs post-graduation LP behavior)
-    pub lp_lock_mode: LpLockMode,
-    /// Resolution mode (Twap, Oracle, or OracleWithTwapFallback)
-    pub resolution_mode: ResolutionMode,
-    /// Oracle authority (required if resolution_mode != Twap)
-    pub oracle_authority: Pubkey,
-    /// Dispute window in seconds after deadline (for OracleWithTwapFallback)
-    pub oracle_dispute_window: u64,
-    /// Emergency resolution window in seconds after deadline (draw fallback)
+    /// Emergency resolution window in seconds after deadline
     pub emergency_window: u64,
-    /// Re-entrancy lock (prevents concurrent buy/sell during CPI)
+    /// Re-entrancy lock
     pub locked: bool,
-    /// PDA bump
-    pub bump: u8,
+    /// Reserved for future fields
+    pub _reserved: [u8; 128],
 }
 
 impl Market {
     pub const SIZE: usize = 8  // discriminator
+        + 1   // version
+        + 1   // bump
         + 32  // authority
         + 8   // market_id
         + 32  // side_a
@@ -110,30 +65,15 @@ impl Market {
         + 8   // deadline
         + 8   // twap_window
         + 8   // twap_interval
-        + 2   // battle_tax_bps
-        + 2   // protocol_fee_bps
-        + 2   // sell_penalty_max_bps
-        + 8   // protection_activation_offset
-        + (8 + 1 + 8)  // curve_params (a, n, b)
-        + 8   // max_observation_change_per_update
-        + 2   // min_twap_spread_bps
-        + 2   // creator_fee_bps
         + 32  // creator_fee_account
+        + 32  // protocol_fee_account
         + 1   // status enum
         + 4   // twap_samples_count
         + 8   // last_sample_ts
-        + (1 + 1)  // winner (Option<u8>)
+        + 2   // winner (Option<u8>)
         + 8   // final_twap_a
         + 8   // final_twap_b
-        + 32  // protocol_fee_account
-        + 1   // graduated_a
-        + 1   // graduated_b
-        + 1   // lp_lock_mode
-        + 1   // resolution_mode
-        + 32  // oracle_authority
-        + 8   // oracle_dispute_window
         + 8   // emergency_window
         + 1   // locked
-        + 1   // bump
-        + 56; // padding (reduced from 64)
+        + 128; // _reserved
 }
