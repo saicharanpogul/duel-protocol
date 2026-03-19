@@ -1,0 +1,27 @@
+{
+  "name": "@duel-protocol/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "dev:indexer": "bun run --watch src/indexer.ts",
+    "dev:cranker": "bun run --watch src/cranker.ts",
+    "start": "bun run src/index.ts",
+    "start:indexer": "bun run src/indexer.ts",
+    "start:cranker": "bun run src/cranker.ts",
+    "migrate": "bun run src/migrate.ts",
+    "build": "bun build src/index.ts src/indexer.ts src/cranker.ts --outdir dist --target bun"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.31.1",
+    "@solana/spl-token": "^0.4.12",
+    "@solana/web3.js": "^1.98.0",
+    "hono": "^4.7.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.7.0"
+  }
+}

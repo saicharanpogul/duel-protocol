@@ -1,0 +1,76 @@
+services:
+  # ─── PostgreSQL ──────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: duel
+      POSTGRES_USER: duel
+      POSTGRES_PASSWORD: duel
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U duel"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ─── API Server ──────────────────────────────────────────────────
+  server:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: server
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://duel:duel@postgres:5432/duel
+      PORT: "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── Indexer ─────────────────────────────────────────────────────
+  indexer:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: indexer
+    environment:
+      DATABASE_URL: postgresql://duel:duel@postgres:5432/duel
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      SOLANA_WS_URL: ${SOLANA_WS_URL:-wss://api.devnet.solana.com}
+      BACKFILL_LIMIT: "1000"
+      SYNC_INTERVAL_MS: "60000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── Cranker ─────────────────────────────────────────────────────
+  cranker:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: cranker
+    environment:
+      DATABASE_URL: postgresql://duel:duel@postgres:5432/duel
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      CRANKER_KEYPAIR: /run/secrets/cranker_keypair
+      POLL_INTERVAL_MS: "5000"
+      DRY_RUN: ${DRY_RUN:-false}
+    secrets:
+      - cranker_keypair
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+
+secrets:
+  cranker_keypair:
+    file: ./cranker-keypair.json
