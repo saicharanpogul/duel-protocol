@@ -3,8 +3,9 @@
 /**
  * Duel Protocol TWAP Cranker
  *
- * Daemon that automatically submits TWAP samples and resolves markets.
- * Permissionless — anyone can run this. The cranker pays ~0.000005 SOL per tx.
+ * Daemon that automatically submits TWAP samples and resolves+graduates markets.
+ * Permissionless -- anyone can run this. The cranker pays ~0.000005 SOL per sample tx,
+ * and more for resolve_and_graduate (pool creation + position NFT rent).
  *
  * Usage:
  *   CRANKER_KEYPAIR=./cranker-keypair.json RPC_URL=https://api.devnet.solana.com npx ts-node scripts/cranker.ts
@@ -16,16 +17,40 @@
  *   DRY_RUN              - If "true", log actions without sending txs
  */
 
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  ComputeBudgetProgram,
+  Transaction,
+} from "@solana/web3.js";
 import { AnchorProvider, Program, Wallet, BN, Idl } from "@coral-xyz/anchor";
-import { TOKEN_PROGRAM_ID, NATIVE_MINT } from "@solana/spl-token";
+import {
+  TOKEN_PROGRAM_ID,
+  NATIVE_MINT,
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction,
+} from "@solana/spl-token";
 import { readFileSync } from "fs";
 import { homedir } from "os";
 import { resolve } from "path";
 import type { Duel } from "../sdk/src/types";
 import IDL from "../sdk/idl/duel.json";
+import {
+  deriveDammV2Accounts,
+  findConfigPda,
+  findMintPda,
+  findMetadataPda,
+} from "../sdk/src/pda";
+import {
+  METEORA_DAMM_V2_PROGRAM_ID,
+  WSOL_MINT,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_METADATA_PROGRAM_ID,
+} from "../sdk/src/constants";
 
-// ─── Config ────────────────────────────────────────────────────────────
+// -- Config --
 
 const RPC_URL = process.env.RPC_URL || "http://localhost:8899";
 const KEYPAIR_PATH =
@@ -38,7 +63,11 @@ const PROGRAM_ID = new PublicKey(
   "CgR6V1AxC7exDFNoh3Q5JP9aea9YuPqq283EwACUGpZE"
 );
 
-// ─── Setup ─────────────────────────────────────────────────────────────
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
+  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+);
+
+// -- Setup --
 
 function loadKeypair(path: string): Keypair {
   const raw = readFileSync(path, "utf-8");
@@ -59,7 +88,7 @@ function log(
   console.log(JSON.stringify(entry));
 }
 
-// ─── Market State Helpers ──────────────────────────────────────────────
+// -- Market State Helpers --
 
 interface MarketData {
   publicKey: PublicKey;
@@ -77,29 +106,76 @@ interface MarketData {
     lastSampleTs: BN;
     protocolFeeAccount: PublicKey;
     creatorFeeAccount: PublicKey;
-    resolutionMode: { twap: {} } | { oracle: {} } | { oracleWithTwapFallback: {} };
-    oracleDisputeWindow: BN;
     bump: number;
   };
 }
 
-function isActive(status: MarketData["account"]["status"]): boolean {
-  return "active" in status;
-}
-
-function isTwapObservation(status: MarketData["account"]["status"]): boolean {
-  return "twapObservation" in status;
+interface SideData {
+  market: PublicKey;
+  sideIndex: number;
+  tokenMint: PublicKey;
+  tokenReserveVault: PublicKey;
+  quoteReserveVault: PublicKey;
+  totalSupply: BN;
+  circulatingSupply: BN;
+  twapAccumulator: BN;
+  bump: number;
 }
 
 function isResolved(status: MarketData["account"]["status"]): boolean {
   return "resolved" in status;
 }
 
-function isOracleOnly(mode: MarketData["account"]["resolutionMode"]): boolean {
-  return "oracle" in mode;
+/**
+ * Determine the expected winner based on TWAP accumulators.
+ * Returns 0 (side A wins) or 1 (side B wins).
+ */
+function determineExpectedWinner(
+  sideAData: SideData,
+  sideBData: SideData,
+  twapSamplesCount: number,
+  quoteVaultAAmount: bigint,
+  quoteVaultBAmount: bigint
+): number {
+  const samples = BigInt(twapSamplesCount);
+  if (samples === 0n) return 0;
+
+  const accA = BigInt(sideAData.twapAccumulator.toString());
+  const accB = BigInt(sideBData.twapAccumulator.toString());
+
+  const finalTwapA = accA / samples;
+  const finalTwapB = accB / samples;
+
+  if (finalTwapA > finalTwapB) return 0;
+  if (finalTwapB > finalTwapA) return 1;
+
+  // Exact tie: side with higher reserve wins, side A wins if equal
+  if (quoteVaultAAmount >= quoteVaultBAmount) return 0;
+  return 1;
 }
 
-// ─── Cranker Logic ─────────────────────────────────────────────────────
+/**
+ * Ensure an ATA exists. Returns the ATA address and any pre-instruction needed.
+ */
+async function ensureAta(
+  connection: Connection,
+  payer: PublicKey,
+  owner: PublicKey,
+  mint: PublicKey,
+  allowOwnerOffCurve: boolean = false
+): Promise<{ ata: PublicKey; createIx: ReturnType<typeof createAssociatedTokenAccountInstruction> | null }> {
+  const ata = await getAssociatedTokenAddress(mint, owner, allowOwnerOffCurve);
+  const info = await connection.getAccountInfo(ata);
+  if (info) {
+    return { ata, createIx: null };
+  }
+  return {
+    ata,
+    createIx: createAssociatedTokenAccountInstruction(payer, ata, owner, mint),
+  };
+}
+
+// -- Cranker Logic --
 
 async function crankerLoop(
   program: Program<Duel>,
@@ -141,8 +217,6 @@ async function crankerLoop(
       twapSamplesCount,
       sideA,
       sideB,
-      resolutionMode,
-      oracleDisputeWindow,
     } = market.account;
 
     const dl = deadline.toNumber();
@@ -151,7 +225,7 @@ async function crankerLoop(
     const lastSample = lastSampleTs.toNumber();
     const marketKey = market.publicKey.toBase58().slice(0, 8);
 
-    // ── TWAP Sampling ──
+    // -- TWAP Sampling --
     const twapStart = dl - twWindow;
     const inTwapWindow = now >= twapStart && now <= dl;
     const intervalElapsed =
@@ -185,25 +259,8 @@ async function crankerLoop(
       continue; // Don't try resolution in the same tick as sampling
     }
 
-    // ── Resolution ──
+    // -- Resolution + Graduation --
     if (now >= dl && !isResolved(market.account.status)) {
-      // Oracle-only markets can't be TWAP-resolved
-      if (isOracleOnly(resolutionMode)) {
-        log("INFO", `Skipping oracle-only market: ${marketKey}`);
-        continue;
-      }
-
-      // OracleWithTwapFallback: only resolve after dispute window
-      if ("oracleWithTwapFallback" in resolutionMode) {
-        const disputeEnd = dl + oracleDisputeWindow.toNumber();
-        if (now < disputeEnd) {
-          log("INFO", `Waiting for dispute window: ${marketKey}`, {
-            disputeEnds: new Date(disputeEnd * 1000).toISOString(),
-          });
-          continue;
-        }
-      }
-
       // Need minimum samples
       const minSamples = Math.max(
         1,
@@ -217,37 +274,138 @@ async function crankerLoop(
         continue;
       }
 
-      // Fetch side data for quote vaults
       try {
-        const sideAData = await program.account.side.fetch(sideA);
-        const sideBData = await program.account.side.fetch(sideB);
+        // Fetch side data for TWAP calculation and account addresses
+        const sideAData = await program.account.side.fetch(sideA) as unknown as SideData;
+        const sideBData = await program.account.side.fetch(sideB) as unknown as SideData;
 
-        log("ACTION", `Resolving market: ${marketKey}`, {
+        // Fetch quote vault balances for tiebreaker
+        const quoteVaultAInfo = await program.provider.connection.getTokenAccountBalance(sideAData.quoteReserveVault);
+        const quoteVaultBInfo = await program.provider.connection.getTokenAccountBalance(sideBData.quoteReserveVault);
+        const quoteVaultAAmount = BigInt(quoteVaultAInfo.value.amount);
+        const quoteVaultBAmount = BigInt(quoteVaultBInfo.value.amount);
+
+        // Determine expected winner
+        const expectedWinner = determineExpectedWinner(
+          sideAData,
+          sideBData,
+          twapSamplesCount,
+          quoteVaultAAmount,
+          quoteVaultBAmount
+        );
+
+        const winningSideData = expectedWinner === 0 ? sideAData : sideBData;
+        const losingSideData = expectedWinner === 0 ? sideBData : sideAData;
+        const winningTokenMint = winningSideData.tokenMint;
+        const losingTokenMint = losingSideData.tokenMint;
+
+        log("ACTION", `Resolving+graduating market: ${marketKey}`, {
           market: market.publicKey.toBase58(),
           samples: twapSamplesCount,
+          expectedWinner,
+          twapA: sideAData.twapAccumulator.toString(),
+          twapB: sideBData.twapAccumulator.toString(),
         });
 
         if (!DRY_RUN) {
+          const connection = program.provider.connection;
+
+          // Create market PDA's ATAs for winning token and WSOL (if not exist)
+          const marketTokenAta = await ensureAta(
+            connection,
+            cranker.publicKey,
+            market.publicKey,
+            winningTokenMint,
+            true // allowOwnerOffCurve for PDA owner
+          );
+          const marketWsolAta = await ensureAta(
+            connection,
+            cranker.publicKey,
+            market.publicKey,
+            NATIVE_MINT,
+            true
+          );
+
+          // Send ATA creation txs if needed
+          const ataIxs = [marketTokenAta.createIx, marketWsolAta.createIx].filter(Boolean);
+          if (ataIxs.length > 0) {
+            const ataTx = new Transaction();
+            for (const ix of ataIxs) {
+              if (ix) ataTx.add(ix);
+            }
+            const ataSig = await program.provider.sendAndConfirm!(ataTx, [cranker]);
+            log("INFO", `Created ATAs for market PDA: ${marketKey}`, { tx: ataSig });
+          }
+
+          // Generate new keypair for position NFT mint
+          const positionNftMint = Keypair.generate();
+
+          // Derive all Meteora DAMM v2 PDAs
+          const damm = deriveDammV2Accounts(
+            winningTokenMint,
+            positionNftMint.publicKey,
+            WSOL_MINT
+          );
+
+          // Derive losing token metadata PDA
+          const [losingTokenMetadata] = findMetadataPda(losingTokenMint);
+
+          // Derive config PDA
+          const [configPda] = findConfigPda();
+
+          // Derive token mints (they are already in side data, but we need the actual accounts)
+          const tokenMintA = sideAData.tokenMint;
+          const tokenMintB = sideBData.tokenMint;
+
+          // Build resolve_and_graduate transaction with compute budget
           const tx = await program.methods
-            .resolveMarket()
+            .resolveAndGraduate(expectedWinner)
             .accountsStrict({
               resolver: cranker.publicKey,
               market: market.publicKey,
+              config: configPda,
               sideA,
               sideB,
-              quoteMint: market.account.quoteMint,
               quoteVaultA: sideAData.quoteReserveVault,
               quoteVaultB: sideBData.quoteReserveVault,
-              protocolFeeAccount: market.account.protocolFeeAccount,
-              creatorFeeAccount: market.account.creatorFeeAccount,
+              tokenVaultA: sideAData.tokenReserveVault,
+              tokenVaultB: sideBData.tokenReserveVault,
+              tokenMintA,
+              tokenMintB,
+              quoteMint: market.account.quoteMint,
+              marketTokenAta: marketTokenAta.ata,
+              marketWsolAta: marketWsolAta.ata,
+              pool: damm.pool,
+              positionNftMint: positionNftMint.publicKey,
+              positionNftAccount: damm.positionNftAccount,
+              position: damm.position,
+              poolTokenVaultA: damm.tokenAVault,
+              poolTokenVaultB: damm.tokenBVault,
+              poolAuthority: damm.poolAuthority,
+              eventAuthority: damm.eventAuthority,
+              meteoraProgram: METEORA_DAMM_V2_PROGRAM_ID,
+              losingTokenMetadata,
+              tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+              tokenProgram: TOKEN_PROGRAM_ID,
               quoteTokenProgram: TOKEN_PROGRAM_ID,
+              token2022Program: TOKEN_2022_PROGRAM_ID,
+              associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+              systemProgram: SystemProgram.programId,
             })
-            .signers([cranker])
+            .preInstructions([
+              ComputeBudgetProgram.setComputeUnitLimit({ units: 1_000_000 }),
+            ])
+            .signers([cranker, positionNftMint])
             .rpc();
-          log("INFO", `Market resolved: ${marketKey}`, { tx });
+
+          log("INFO", `Market resolved+graduated: ${marketKey}`, {
+            tx,
+            winner: expectedWinner,
+            pool: damm.pool.toBase58(),
+          });
         }
       } catch (err) {
-        log("WARN", `Resolution failed: ${marketKey}`, {
+        log("WARN", `Resolution+graduation failed: ${marketKey}`, {
           error: String(err),
         });
       }
@@ -255,7 +413,7 @@ async function crankerLoop(
   }
 }
 
-// ─── Main ──────────────────────────────────────────────────────────────
+// -- Main --
 
 async function main() {
   const cranker = loadKeypair(KEYPAIR_PATH);
