@@ -22,7 +22,9 @@ import {
   TOKEN_2022_PROGRAM_ID,
   TOKEN_METADATA_PROGRAM_ID,
   CURVE_SCALE,
-  BASE_SELL_FEE_BPS,
+  CURVE_A,
+  CURVE_N,
+  CURVE_B,
   BPS_DENOMINATOR,
 } from "./constants";
 import {
@@ -34,13 +36,14 @@ import {
   findMintPda,
 } from "./pda";
 
-// ─── Program Instance ────────────────────────────────────────────────────
+// ── Program Instance ────────────────────────────────────────────────────
 
 /**
- * Cast IDL JSON to the typed Duel IDL — enables full type inference
- * on Program<Duel>.methods.xxx().accountsPartial()
+ * Cast IDL JSON to the typed Duel IDL. The IDL may be stale after program
+ * refactoring, so we use `as any` to bypass strict type checks until the
+ * IDL is regenerated via `anchor build`.
  */
-const IDL = IDL_JSON as unknown as Duel;
+const IDL = IDL_JSON as any;
 
 /**
  * Create a Duel Protocol program instance.
@@ -49,7 +52,7 @@ export function createDuelProgram(provider: AnchorProvider): Program<Duel> {
   return new Program<Duel>(IDL, provider);
 }
 
-// ─── Account Fetchers ────────────────────────────────────────────────────
+// ── Account Fetchers ────────────────────────────────────────────────────
 
 /**
  * Fetch a Market account.
@@ -88,41 +91,33 @@ export async function fetchConfig(program: Program<Duel>) {
   return program.account.programConfig.fetch(configPda);
 }
 
-// ─── Math Helpers ────────────────────────────────────────────────────────
+// ── Math Helpers ────────────────────────────────────────────────────────
 
 /**
  * Price at a given circulating supply.
- * price(k) = a * k^n / CURVE_SCALE + b
+ * price(k) = CURVE_A * k^CURVE_N / CURVE_SCALE + CURVE_B
  *
- * @param circulatingSupply - Number of tokens currently in circulation (raw u64, 6 decimals)
- * @param curveParams - { a, n, b } from on-chain CurveParams
+ * Uses hardcoded curve constants (a=1, n=2, b=1).
+ *
+ * @param circulatingSupply - Number of tokens currently in circulation
  * @returns Price in lamports (integer)
  */
-export function calculatePrice(
-  circulatingSupply: number,
-  curveParams: { a: number; n: number; b: number }
-): number {
-  const { a, n, b } = curveParams;
+export function calculatePrice(circulatingSupply: number): number {
   const k = circulatingSupply;
-  const term = (a * Math.pow(k, n)) / CURVE_SCALE;
-  return Math.floor(term + b);
+  const term = (CURVE_A * Math.pow(k, CURVE_N)) / CURVE_SCALE;
+  return Math.floor(term + CURVE_B);
 }
 
 /**
- * Reserve integral R(k) = a * k^(n+1) / ((n+1) * CURVE_SCALE) + b * k
+ * Reserve integral R(k) = CURVE_A * k^(CURVE_N+1) / ((CURVE_N+1) * CURVE_SCALE) + CURVE_B * k
  *
  * @param supply - Circulating supply
- * @param curveParams - { a, n, b }
  * @returns Reserve in lamports (may lose precision for very large values)
  */
-export function calculateReserve(
-  supply: number,
-  curveParams: { a: number; n: number; b: number }
-): number {
-  const { a, n, b } = curveParams;
-  const nPlus1 = n + 1;
-  const term1 = (a * Math.pow(supply, nPlus1)) / (nPlus1 * CURVE_SCALE);
-  const term2 = b * supply;
+export function calculateReserve(supply: number): number {
+  const nPlus1 = CURVE_N + 1;
+  const term1 = (CURVE_A * Math.pow(supply, nPlus1)) / (nPlus1 * CURVE_SCALE);
+  const term2 = CURVE_B * supply;
   return Math.floor(term1 + term2);
 }
 
@@ -133,20 +128,18 @@ export function calculateReserve(
  * @param quoteAmount - Amount of quote tokens to spend (lamports)
  * @param currentSupply - Current circulating supply
  * @param totalSupply - Total supply per side
- * @param curveParams - { a, n, b }
  * @returns Number of tokens received
  */
 export function calculateTokensOut(
   quoteAmount: number,
   currentSupply: number,
-  totalSupply: number,
-  curveParams: { a: number; n: number; b: number }
+  totalSupply: number
 ): number {
   if (quoteAmount === 0) return 0;
   const available = totalSupply - currentSupply;
   if (available <= 0) return 0;
 
-  const rCurrent = calculateReserve(currentSupply, curveParams);
+  const rCurrent = calculateReserve(currentSupply);
 
   let lo = 0;
   let hi = available;
@@ -154,7 +147,7 @@ export function calculateTokensOut(
 
   while (lo <= hi) {
     const mid = lo + Math.floor((hi - lo) / 2);
-    const rNew = calculateReserve(currentSupply + mid, curveParams);
+    const rNew = calculateReserve(currentSupply + mid);
     const cost = rNew - rCurrent;
 
     if (cost <= quoteAmount) {
@@ -176,18 +169,16 @@ export function calculateTokensOut(
  *
  * @param tokenAmount - Number of tokens to sell
  * @param currentSupply - Current circulating supply
- * @param curveParams - { a, n, b }
- * @returns Quote tokens received (lamports, before penalty)
+ * @returns Quote tokens received (lamports, before fees)
  */
 export function calculateQuoteOut(
   tokenAmount: number,
-  currentSupply: number,
-  curveParams: { a: number; n: number; b: number }
+  currentSupply: number
 ): number {
   if (tokenAmount === 0) return 0;
   if (currentSupply < tokenAmount) throw new Error("Insufficient supply");
-  const rCurrent = calculateReserve(currentSupply, curveParams);
-  const rNew = calculateReserve(currentSupply - tokenAmount, curveParams);
+  const rCurrent = calculateReserve(currentSupply);
+  const rNew = calculateReserve(currentSupply - tokenAmount);
   return Math.floor(rCurrent - rNew);
 }
 
@@ -204,27 +195,26 @@ export function calculateSentiment(priceA: number, priceB: number): number {
 }
 
 /**
- * Calculate sell penalty in basis points.
- * penalty = BASE_SELL_FEE + maxPenalty * (1 - r/rPeak)^2
+ * Calculate trade fee split between protocol and creator.
  *
- * @param currentReserve - Current quote reserve
- * @param peakReserve - Historical peak reserve
- * @param maxPenaltyBps - Maximum additional penalty in bps
- * @returns Penalty in basis points
+ * @param amount - Trade amount (quote tokens)
+ * @param feeBps - Trade fee in basis points
+ * @param creatorSplitBps - Creator's share of trade fee in basis points
+ * @returns { protocolFee, creatorFee, netAmount }
  */
-export function calculateSellPenalty(
-  currentReserve: number,
-  peakReserve: number,
-  maxPenaltyBps: number
-): number {
-  if (peakReserve === 0) return BASE_SELL_FEE_BPS;
-  const ratio = currentReserve / peakReserve;
-  const deficit = Math.max(0, 1 - ratio);
-  const penalty = BASE_SELL_FEE_BPS + maxPenaltyBps * deficit * deficit;
-  return Math.min(Math.floor(penalty), BPS_DENOMINATOR);
+export function calculateTradeFee(
+  amount: number,
+  feeBps: number,
+  creatorSplitBps: number
+): { protocolFee: number; creatorFee: number; netAmount: number } {
+  const totalFee = Math.floor((amount * feeBps) / BPS_DENOMINATOR);
+  const creatorFee = Math.floor((totalFee * creatorSplitBps) / BPS_DENOMINATOR);
+  const protocolFee = totalFee - creatorFee;
+  const netAmount = amount - totalFee;
+  return { protocolFee, creatorFee, netAmount };
 }
 
-// ─── Instruction Builders ────────────────────────────────────────────────
+// ── Instruction Builders ────────────────────────────────────────────────
 
 // ── Admin Instructions ──────────────────────────────────────────────────
 
@@ -235,13 +225,14 @@ export async function buildInitializeConfigInstruction(
   program: Program<Duel>,
   admin: PublicKey,
   protocolFeeAccount: PublicKey,
-  defaultProtocolFeeBps: number,
+  tradeFeeBps: number,
+  creatorFeeSplitBps: number,
   marketCreationFee: BN
 ) {
   const [configPda] = findConfigPda();
 
-  const instruction = await program.methods
-    .initializeConfig(defaultProtocolFeeBps, marketCreationFee)
+  const instruction = await (program.methods as any)
+    .initializeConfig(tradeFeeBps, creatorFeeSplitBps, marketCreationFee)
     .accountsPartial({
       admin,
       config: configPda,
@@ -261,7 +252,8 @@ export async function buildUpdateConfigInstruction(
   admin: PublicKey,
   opts: {
     paused?: boolean;
-    defaultProtocolFeeBps?: number;
+    tradeFeeBps?: number;
+    creatorFeeSplitBps?: number;
     marketCreationFee?: BN;
     minMarketDuration?: BN;
     newProtocolFeeAccount?: PublicKey;
@@ -270,10 +262,11 @@ export async function buildUpdateConfigInstruction(
 ) {
   const [configPda] = findConfigPda();
 
-  const instruction = await program.methods
+  const instruction = await (program.methods as any)
     .updateConfig(
       opts.paused ?? null,
-      opts.defaultProtocolFeeBps ?? null,
+      opts.tradeFeeBps ?? null,
+      opts.creatorFeeSplitBps ?? null,
       opts.marketCreationFee ?? null,
       opts.minMarketDuration ?? null
     )
@@ -293,6 +286,9 @@ export async function buildUpdateConfigInstruction(
 /**
  * Build an initialize_market instruction.
  *
+ * Simplified: no battle_tax, no penalty, no curve params, no resolution mode,
+ * no oracle. All of those are now hardcoded on-chain.
+ *
  * @param program - Duel program instance
  * @param creator - Market creator public key (payer)
  * @param marketId - Unique market ID per creator
@@ -307,25 +303,12 @@ export async function buildInitializeMarketInstruction(
     deadline: BN;
     twapWindow: BN;
     twapInterval: BN;
-    battleTaxBps: number;
-    protocolFeeBps: number;
-    sellPenaltyMaxBps: number;
-    protectionActivationOffset: BN;
-    curveParams: { a: BN; n: number; b: BN };
-    totalSupplyPerSide: BN;
     nameA: string;
     symbolA: string;
     uriA: string;
     nameB: string;
     symbolB: string;
     uriB: string;
-    lpLockMode: any;
-    maxObservationChangePerUpdate: BN;
-    minTwapSpreadBps: number;
-    creatorFeeBps: number;
-    resolutionMode: any;
-    oracleAuthority: PublicKey;
-    oracleDisputeWindow: BN;
     creatorFeeAccount: PublicKey;
   },
   quoteMint: PublicKey = NATIVE_MINT
@@ -335,31 +318,18 @@ export async function buildInitializeMarketInstruction(
   const [metadataA] = findMetadataPda(accounts.mintA);
   const [metadataB] = findMetadataPda(accounts.mintB);
 
-  const instruction = await program.methods
+  const instruction = await (program.methods as any)
     .initializeMarket(
       new BN(marketId.toString()),
       params.deadline,
       params.twapWindow,
       params.twapInterval,
-      params.battleTaxBps,
-      params.protocolFeeBps,
-      params.sellPenaltyMaxBps,
-      params.protectionActivationOffset,
-      params.curveParams,
-      params.totalSupplyPerSide,
       params.nameA,
       params.symbolA,
       params.uriA,
       params.nameB,
       params.symbolB,
-      params.uriB,
-      params.lpLockMode,
-      params.maxObservationChangePerUpdate,
-      params.minTwapSpreadBps,
-      params.creatorFeeBps,
-      params.resolutionMode,
-      params.oracleAuthority,
-      params.oracleDisputeWindow
+      params.uriB
     )
     .accountsPartial({
       creator,
@@ -414,6 +384,7 @@ export async function buildBuyTokensInstruction(
   const sideData = await program.account.side.fetch(sideKey);
 
   const [configPda] = findConfigPda();
+  const configData = await program.account.programConfig.fetch(configPda);
 
   const buyerTokenAccount = await getAssociatedTokenAddress(
     sideData.tokenMint,
@@ -437,7 +408,7 @@ export async function buildBuyTokensInstruction(
     );
   }
 
-  const instruction = await program.methods
+  const instruction = await (program.methods as any)
     .buyTokens(side, quoteAmount, minTokensOut)
     .accountsPartial({
       buyer,
@@ -449,6 +420,8 @@ export async function buildBuyTokensInstruction(
       quoteMint,
       quoteVault: sideData.quoteReserveVault,
       buyerQuoteAccount,
+      protocolFeeAccount: configData.protocolFeeAccount,
+      creatorFeeAccount: (marketData as any).creatorFeeAccount,
       config: configPda,
       tokenProgram: TOKEN_PROGRAM_ID,
       quoteTokenProgram: TOKEN_PROGRAM_ID,
@@ -475,6 +448,7 @@ export async function buildSellTokensInstruction(
   const sideData = await program.account.side.fetch(sideKey);
 
   const [configPda] = findConfigPda();
+  const configData = await program.account.programConfig.fetch(configPda);
 
   const sellerTokenAccount = await getAssociatedTokenAddress(
     sideData.tokenMint,
@@ -482,7 +456,7 @@ export async function buildSellTokensInstruction(
   );
   const sellerQuoteAccount = await getAssociatedTokenAddress(quoteMint, seller);
 
-  const instruction = await program.methods
+  const instruction = await (program.methods as any)
     .sellTokens(side, tokenAmount, minQuoteOut)
     .accountsPartial({
       seller,
@@ -494,6 +468,8 @@ export async function buildSellTokensInstruction(
       quoteMint,
       quoteVault: sideData.quoteReserveVault,
       sellerQuoteAccount,
+      protocolFeeAccount: configData.protocolFeeAccount,
+      creatorFeeAccount: (marketData as any).creatorFeeAccount,
       config: configPda,
       tokenProgram: TOKEN_PROGRAM_ID,
       quoteTokenProgram: TOKEN_PROGRAM_ID,
@@ -513,7 +489,7 @@ export async function buildRecordTwapSampleInstruction(
 ) {
   const marketData = await program.account.market.fetch(market);
 
-  const instruction = await program.methods
+  const instruction = await (program.methods as any)
     .recordTwapSample()
     .accountsPartial({
       cranker,
@@ -527,70 +503,147 @@ export async function buildRecordTwapSampleInstruction(
 }
 
 /**
- * Build a resolve_market instruction (permissionless TWAP resolution).
+ * Build a resolve_and_graduate instruction.
+ *
+ * Atomically resolves the market via TWAP, transfers loser reserve to winner,
+ * creates a Meteora DAMM v2 pool with winning side tokens + all SOL, and
+ * permanently locks the LP position.
+ *
+ * @param program - Duel program instance
+ * @param market - Market public key
+ * @param expectedWinner - Expected winning side (0 = A, 1 = B)
+ * @param resolver - Signer/payer public key
+ * @param positionNftMint - Keypair for position NFT mint (must be signer)
+ * @param quoteMint - Quote token mint (default: NATIVE_MINT / WSOL)
  */
-export async function buildResolveMarketInstruction(
+export async function buildResolveAndGraduateInstruction(
   program: Program<Duel>,
   market: PublicKey,
-  resolver: PublicKey
+  expectedWinner: number,
+  resolver: PublicKey,
+  positionNftMint: Keypair,
+  quoteMint: PublicKey = NATIVE_MINT
 ) {
   const marketData = await program.account.market.fetch(market);
   const sideAData = await program.account.side.fetch(marketData.sideA);
   const sideBData = await program.account.side.fetch(marketData.sideB);
 
-  const instruction = await program.methods
-    .resolveMarket()
+  const [configPda] = findConfigPda();
+
+  // Determine winning side data for Meteora account derivation
+  const winningSideData = expectedWinner === 0 ? sideAData : sideBData;
+  const losingMint = expectedWinner === 0 ? sideBData.tokenMint : sideAData.tokenMint;
+  const winningTokenMint = winningSideData.tokenMint;
+
+  // Derive DAMM v2 PDAs
+  const damm = deriveDammV2Accounts(
+    winningTokenMint,
+    positionNftMint.publicKey,
+    WSOL_MINT
+  );
+
+  // Market PDA's ATAs for seeding the pool
+  const marketTokenAta = await getAssociatedTokenAddress(
+    winningTokenMint,
+    market,
+    true // allowOwnerOffCurve (PDA)
+  );
+  const marketWsolAta = await getAssociatedTokenAddress(
+    WSOL_MINT,
+    market,
+    true
+  );
+
+  // Derive losing token metadata PDA
+  const [losingTokenMetadata] = findMetadataPda(losingMint);
+
+  // Pre-instructions: create market PDA's ATAs + compute budget
+  const connection = program.provider.connection;
+  const preInstructions: TransactionInstruction[] = [];
+
+  // Compute budget
+  preInstructions.push(
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 800_000 })
+  );
+
+  const marketTokenAtaInfo = await connection.getAccountInfo(marketTokenAta);
+  if (!marketTokenAtaInfo) {
+    preInstructions.push(
+      createAssociatedTokenAccountInstruction(
+        resolver,
+        marketTokenAta,
+        market,
+        winningTokenMint
+      )
+    );
+  }
+
+  const marketWsolAtaInfo = await connection.getAccountInfo(marketWsolAta);
+  if (!marketWsolAtaInfo) {
+    preInstructions.push(
+      createAssociatedTokenAccountInstruction(
+        resolver,
+        marketWsolAta,
+        market,
+        WSOL_MINT
+      )
+    );
+  }
+
+  const instruction = await (program.methods as any)
+    .resolveAndGraduate(expectedWinner)
     .accountsPartial({
       resolver,
       market,
+      config: configPda,
       sideA: marketData.sideA,
       sideB: marketData.sideB,
-      quoteMint: marketData.quoteMint,
       quoteVaultA: sideAData.quoteReserveVault,
       quoteVaultB: sideBData.quoteReserveVault,
-      protocolFeeAccount: marketData.protocolFeeAccount,
-      creatorFeeAccount: marketData.creatorFeeAccount,
+      tokenVaultA: sideAData.tokenReserveVault,
+      tokenVaultB: sideBData.tokenReserveVault,
+      tokenMintA: sideAData.tokenMint,
+      tokenMintB: sideBData.tokenMint,
+      quoteMint,
+      marketTokenAta,
+      marketWsolAta,
+      pool: damm.pool,
+      positionNftMint: positionNftMint.publicKey,
+      positionNftAccount: damm.positionNftAccount,
+      position: damm.position,
+      poolTokenVaultA: damm.tokenAVault,
+      poolTokenVaultB: damm.tokenBVault,
+      poolAuthority: damm.poolAuthority,
+      eventAuthority: damm.eventAuthority,
+      meteoraProgram: METEORA_DAMM_V2_PROGRAM_ID,
+      losingTokenMetadata,
+      tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+      tokenProgram: TOKEN_PROGRAM_ID,
       quoteTokenProgram: TOKEN_PROGRAM_ID,
+      token2022Program: TOKEN_2022_PROGRAM_ID,
+      associatedTokenProgram: new PublicKey(
+        "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+      ),
+      systemProgram: SystemProgram.programId,
     })
+    .signers([positionNftMint])
     .instruction();
 
-  return { instruction };
+  return {
+    preInstructions,
+    instruction,
+    positionNftMint,
+    accounts: {
+      pool: damm.pool,
+      position: damm.position,
+      marketTokenAta,
+      marketWsolAta,
+    },
+  };
 }
 
 /**
- * Build a resolve_with_oracle instruction (oracle-submitted resolution).
- */
-export async function buildResolveWithOracleInstruction(
-  program: Program<Duel>,
-  market: PublicKey,
-  oracle: PublicKey,
-  winningSide: number
-) {
-  const marketData = await program.account.market.fetch(market);
-  const sideAData = await program.account.side.fetch(marketData.sideA);
-  const sideBData = await program.account.side.fetch(marketData.sideB);
-
-  const instruction = await program.methods
-    .resolveWithOracle(winningSide)
-    .accountsPartial({
-      oracle,
-      market,
-      sideA: marketData.sideA,
-      sideB: marketData.sideB,
-      quoteMint: marketData.quoteMint,
-      quoteVaultA: sideAData.quoteReserveVault,
-      quoteVaultB: sideBData.quoteReserveVault,
-      protocolFeeAccount: marketData.protocolFeeAccount,
-      creatorFeeAccount: marketData.creatorFeeAccount,
-      quoteTokenProgram: TOKEN_PROGRAM_ID,
-    })
-    .instruction();
-
-  return { instruction };
-}
-
-/**
- * Build a sell_post_resolution instruction (after market is resolved).
+ * Build a sell_post_resolution instruction (after emergency resolve -- draw only).
  */
 export async function buildSellPostResolutionInstruction(
   program: Program<Duel>,
@@ -613,7 +666,7 @@ export async function buildSellPostResolutionInstruction(
   );
   const sellerQuoteAccount = await getAssociatedTokenAddress(quoteMint, seller);
 
-  const instruction = await program.methods
+  const instruction = await (program.methods as any)
     .sellPostResolution(side, tokenAmount, minQuoteOut)
     .accountsPartial({
       seller,
@@ -634,157 +687,37 @@ export async function buildSellPostResolutionInstruction(
   return { instruction };
 }
 
-// ── Graduation & Post-Graduation Instructions ───────────────────────────
-
-/**
- * Build graduation instruction with all required accounts.
- *
- * @param program - Duel program instance
- * @param market - Market public key
- * @param side - Side index (0 = A, 1 = B)
- * @param authority - Signer/payer public key
- * @param positionNftMint - Keypair for position NFT mint (must be signer)
- * @param quoteMint - Quote token mint (default: NATIVE_MINT / WSOL)
- */
-export async function buildGraduateInstruction(
-  program: Program<Duel>,
-  market: PublicKey,
-  side: number,
-  authority: PublicKey,
-  positionNftMint: Keypair,
-  quoteMint: PublicKey = NATIVE_MINT
-) {
-  const marketData = await program.account.market.fetch(market);
-  const sideKey = side === 0 ? marketData.sideA : marketData.sideB;
-  const sideData = await program.account.side.fetch(sideKey);
-
-  const tokenMint = sideData.tokenMint;
-
-  // Derive DAMM v2 PDAs
-  const damm = deriveDammV2Accounts(
-    tokenMint,
-    positionNftMint.publicKey,
-    WSOL_MINT
-  );
-
-  // Authority-owned ATAs
-  const payerTokenA = await getAssociatedTokenAddress(tokenMint, authority);
-  const payerTokenB = await getAssociatedTokenAddress(WSOL_MINT, authority);
-
-  // Pre-instructions: create ATAs if they don't exist
-  const connection = program.provider.connection;
-  const preInstructions: TransactionInstruction[] = [];
-
-  const payerTokenAInfo = await connection.getAccountInfo(payerTokenA);
-  if (!payerTokenAInfo) {
-    preInstructions.push(
-      createAssociatedTokenAccountInstruction(
-        authority,
-        payerTokenA,
-        authority,
-        tokenMint
-      )
-    );
-  }
-
-  const payerTokenBInfo = await connection.getAccountInfo(payerTokenB);
-  if (!payerTokenBInfo) {
-    preInstructions.push(
-      createAssociatedTokenAccountInstruction(
-        authority,
-        payerTokenB,
-        authority,
-        WSOL_MINT
-      )
-    );
-  }
-
-  // Add compute budget
-  preInstructions.unshift(
-    ComputeBudgetProgram.setComputeUnitLimit({ units: 800_000 })
-  );
-
-  // Build the graduation instruction
-  const graduateInstruction = await program.methods
-    .graduateToDex(side)
-    .accountsPartial({
-      authority,
-      market,
-      sideAccount: sideKey,
-      tokenMint,
-      tokenVault: sideData.tokenReserveVault,
-      quoteMint,
-      quoteVault: sideData.quoteReserveVault,
-      quoteTokenProgram: TOKEN_PROGRAM_ID,
-      wsolMint: WSOL_MINT,
-      positionNftMint: positionNftMint.publicKey,
-      positionNftAccount: damm.positionNftAccount,
-      poolAuthority: damm.poolAuthority,
-      pool: damm.pool,
-      position: damm.position,
-      tokenAVault: damm.tokenAVault,
-      tokenBVault: damm.tokenBVault,
-      payerTokenA,
-      payerTokenB,
-      tokenAProgram: TOKEN_PROGRAM_ID,
-      tokenBProgram: TOKEN_PROGRAM_ID,
-      token2022Program: TOKEN_2022_PROGRAM_ID,
-      eventAuthority: damm.eventAuthority,
-      meteoraProgram: METEORA_DAMM_V2_PROGRAM_ID,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      associatedTokenProgram: new PublicKey(
-        "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-      ),
-      systemProgram: SystemProgram.programId,
-    })
-    .signers([positionNftMint])
-    .instruction();
-
-  return {
-    preInstructions,
-    graduateInstruction,
-    positionNftMint,
-    accounts: {
-      pool: damm.pool,
-      position: damm.position,
-      payerTokenA,
-      payerTokenB,
-    },
-  };
-}
+// ── Post-Graduation Instructions ────────────────────────────────────────
 
 /**
  * Build claim_pool_fees instruction.
  * Claims accrued trading fees from a graduated Meteora DAMM v2 pool.
+ * No side parameter -- claims for the winning side's pool.
  */
 export async function buildClaimPoolFeesInstruction(
   program: Program<Duel>,
   market: PublicKey,
-  side: number,
   authority: PublicKey,
   positionNftMint: PublicKey,
+  winningTokenMint: PublicKey,
   feeReceiverTokenA: PublicKey,
   feeReceiverTokenB: PublicKey
 ) {
-  const marketData = await program.account.market.fetch(market);
-  const sideKey = side === 0 ? marketData.sideA : marketData.sideB;
-  const sideData = await program.account.side.fetch(sideKey);
   const [configPda] = findConfigPda();
 
   const damm = deriveDammV2Accounts(
-    sideData.tokenMint,
+    winningTokenMint,
     positionNftMint,
     WSOL_MINT
   );
 
-  const instruction = await program.methods
-    .claimPoolFees(side)
+  const instruction = await (program.methods as any)
+    .claimPoolFees()
     .accountsPartial({
       authority,
       market,
       config: configPda,
-      sideAccount: sideKey,
-      tokenMint: sideData.tokenMint,
+      tokenMint: winningTokenMint,
       wsolMint: WSOL_MINT,
       poolAuthority: damm.poolAuthority,
       pool: damm.pool,
@@ -799,144 +732,6 @@ export async function buildClaimPoolFeesInstruction(
       eventAuthority: damm.eventAuthority,
       meteoraProgram: METEORA_DAMM_V2_PROGRAM_ID,
       tokenProgram: TOKEN_PROGRAM_ID,
-    })
-    .instruction();
-
-  return { instruction };
-}
-
-/**
- * Build lock_position instruction.
- * Permanently locks LP liquidity in a Meteora DAMM v2 position.
- */
-export async function buildLockPositionInstruction(
-  program: Program<Duel>,
-  market: PublicKey,
-  side: number,
-  authority: PublicKey,
-  positionNftMint: PublicKey,
-  lockLiquidity: BN
-) {
-  const marketData = await program.account.market.fetch(market);
-  const sideKey = side === 0 ? marketData.sideA : marketData.sideB;
-  const sideData = await program.account.side.fetch(sideKey);
-
-  const damm = deriveDammV2Accounts(
-    sideData.tokenMint,
-    positionNftMint,
-    WSOL_MINT
-  );
-
-  const instruction = await program.methods
-    .lockPosition(side, lockLiquidity)
-    .accountsPartial({
-      authority,
-      market,
-      sideAccount: sideKey,
-      pool: damm.pool,
-      position: damm.position,
-      positionNftAccount: damm.positionNftAccount,
-      eventAuthority: damm.eventAuthority,
-      meteoraProgram: METEORA_DAMM_V2_PROGRAM_ID,
-    })
-    .instruction();
-
-  return { instruction };
-}
-
-/**
- * Build remove_liquidity instruction.
- * Removes LP liquidity from a Meteora DAMM v2 pool (only when lp_lock_mode == Unlocked).
- */
-export async function buildRemoveLiquidityInstruction(
-  program: Program<Duel>,
-  market: PublicKey,
-  side: number,
-  authority: PublicKey,
-  positionNftMint: PublicKey,
-  liquidityDelta: BN,
-  minTokenA: BN,
-  minTokenB: BN,
-  tokenAAccount: PublicKey,
-  tokenBAccount: PublicKey
-) {
-  const marketData = await program.account.market.fetch(market);
-  const sideKey = side === 0 ? marketData.sideA : marketData.sideB;
-  const sideData = await program.account.side.fetch(sideKey);
-  const [configPda] = findConfigPda();
-
-  const damm = deriveDammV2Accounts(
-    sideData.tokenMint,
-    positionNftMint,
-    WSOL_MINT
-  );
-
-  const instruction = await program.methods
-    .removeLiquidity(side, liquidityDelta, minTokenA, minTokenB)
-    .accountsPartial({
-      authority,
-      market,
-      config: configPda,
-      sideAccount: sideKey,
-      tokenMint: sideData.tokenMint,
-      wsolMint: WSOL_MINT,
-      poolAuthority: damm.poolAuthority,
-      pool: damm.pool,
-      position: damm.position,
-      tokenAAccount,
-      tokenBAccount,
-      tokenAVault: damm.tokenAVault,
-      tokenBVault: damm.tokenBVault,
-      positionNftAccount: damm.positionNftAccount,
-      tokenAProgram: TOKEN_PROGRAM_ID,
-      tokenBProgram: TOKEN_PROGRAM_ID,
-      eventAuthority: damm.eventAuthority,
-      meteoraProgram: METEORA_DAMM_V2_PROGRAM_ID,
-    })
-    .instruction();
-
-  return { instruction };
-}
-
-/**
- * Build close_position instruction.
- * Closes a Meteora position NFT and reclaims rent (only when lp_lock_mode == Unlocked).
- */
-export async function buildClosePositionInstruction(
-  program: Program<Duel>,
-  market: PublicKey,
-  side: number,
-  authority: PublicKey,
-  positionNftMint: PublicKey,
-  rentReceiver: PublicKey
-) {
-  const marketData = await program.account.market.fetch(market);
-  const sideKey = side === 0 ? marketData.sideA : marketData.sideB;
-  const sideData = await program.account.side.fetch(sideKey);
-  const [configPda] = findConfigPda();
-
-  const damm = deriveDammV2Accounts(
-    sideData.tokenMint,
-    positionNftMint,
-    WSOL_MINT
-  );
-
-  const instruction = await program.methods
-    .closePosition(side)
-    .accountsPartial({
-      authority,
-      market,
-      config: configPda,
-      sideAccount: sideKey,
-      positionNftMint,
-      positionNftAccount: damm.positionNftAccount,
-      pool: damm.pool,
-      position: damm.position,
-      poolAuthority: damm.poolAuthority,
-      rentReceiver,
-      token2022Program: TOKEN_2022_PROGRAM_ID,
-      eventAuthority: damm.eventAuthority,
-      meteoraProgram: METEORA_DAMM_V2_PROGRAM_ID,
     })
     .instruction();
 
@@ -959,7 +754,7 @@ export async function buildCloseQuoteVaultInstruction(
   const sideKey = side === 0 ? marketData.sideA : marketData.sideB;
   const sideData = await program.account.side.fetch(sideKey);
 
-  return program.methods
+  const instruction = await (program.methods as any)
     .closeQuoteVault(side)
     .accountsPartial({
       closer: rentReceiver,
@@ -972,6 +767,8 @@ export async function buildCloseQuoteVaultInstruction(
       quoteTokenProgram: TOKEN_PROGRAM_ID,
     })
     .instruction();
+
+  return { instruction };
 }
 
 /**
@@ -987,7 +784,7 @@ export async function buildCloseMarketInstruction(
   const marketData = await program.account.market.fetch(market);
   const [configPda] = findConfigPda();
 
-  const instruction = await program.methods
+  const instruction = await (program.methods as any)
     .closeMarket(side)
     .accountsPartial({
       authority,
@@ -1014,7 +811,7 @@ export async function buildEmergencyResolveInstruction(
   const marketData = await program.account.market.fetch(market);
   const [configPda] = findConfigPda();
 
-  const instruction = await program.methods
+  const instruction = await (program.methods as any)
     .emergencyResolve()
     .accountsPartial({
       resolver,

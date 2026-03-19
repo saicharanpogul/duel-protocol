@@ -70,12 +70,10 @@ function printSnapshot(indexer: DuelIndexer) {
   console.log("├─────────────────────────────────────────────────┤");
   console.log(`│  Markets:       ${String(snap.global.totalMarkets).padStart(10)}            │`);
   console.log(`│  Resolved:      ${String(snap.global.marketsResolved).padStart(10)}            │`);
-  console.log(`│  Graduations:   ${String(snap.global.totalGraduations).padStart(10)}            │`);
   console.log(`│  Buys:          ${String(snap.global.totalBuys).padStart(10)}            │`);
   console.log(`│  Sells:         ${String(snap.global.totalSells).padStart(10)}            │`);
   console.log(`│  Volume (SOL):  ${formatSol(snap.global.totalVolumeSol).padStart(10)}            │`);
-  console.log(`│  Fees (SOL):    ${formatSol(snap.global.totalProtocolFees).padStart(10)}            │`);
-  console.log(`│  Penalties:     ${formatSol(snap.global.totalPenalties).padStart(10)}            │`);
+  console.log(`│  Fees (SOL):    ${formatSol(snap.global.totalFees).padStart(10)}            │`);
   console.log(`│  Traders:       ${String(snap.global.uniqueTraders).padStart(10)}            │`);
   console.log(`│  Events:        ${String(snap.global.eventsProcessed).padStart(10)}            │`);
   console.log("└─────────────────────────────────────────────────┘");
@@ -83,7 +81,7 @@ function printSnapshot(indexer: DuelIndexer) {
   if (snap.markets.length > 0) {
     console.log("\n  Markets:");
     for (const m of snap.markets) {
-      const status = m.resolved ? (m.graduated > 0 ? "🎓" : "✅") : "⏳";
+      const status = m.resolved ? (m.dexPool ? "graduated" : "resolved") : "pending";
       console.log(`    ${status} ${m.market.substring(0, 8)}... | buys=${m.totalBuys} sells=${m.totalSells} vol=${formatSol(m.totalVolumeSol)} traders=${m.uniqueTraders}`);
     }
   }

@@ -25,49 +25,78 @@ export const DAMM_V2_POOL_AUTHORITY = new PublicKey(
   "HLnpSz9hBF7wsohdFRYBzi4BNGzar3bPVq34JFsEfnY"
 );
 
+/** Metaplex Token Metadata program ID */
+export const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
+  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+);
+
+/** Native SOL mint (wrapped SOL) */
+export { NATIVE_MINT } from "@solana/spl-token";
+
+// ── Token Economics (hardcoded, not configurable) ───────────────────────
+
+/** Total supply per side (1B tokens) */
+export const TOTAL_SUPPLY_PER_SIDE = 1_000_000_000;
+
+/** Token decimals (whole tokens only) */
+export const TOKEN_DECIMALS = 0;
+
+// ── Bonding Curve Constants ─────────────────────────────────────────────
+
+/** Bonding curve steepness coefficient */
+export const CURVE_A = 1;
+
+/** Bonding curve exponent (quadratic) */
+export const CURVE_N = 2;
+
+/** Bonding curve base price in lamports */
+export const CURVE_B = 1;
+
+/** Curve scaling factor (10^9) -- matches on-chain CURVE_SCALE */
+export const CURVE_SCALE = 1_000_000_000;
+
+// ── Fees ────────────────────────────────────────────────────────────────
+
 /** BPS denominator (10_000) */
 export const BPS_DENOMINATOR = 10_000;
 
-/** Maximum battle tax BPS (100%) */
-export const MAX_BATTLE_TAX_BPS = 10_000;
+/** Default trade fee in basis points (1%) */
+export const DEFAULT_TRADE_FEE_BPS = 100;
 
-/** Maximum protocol fee BPS */
-export const MAX_PROTOCOL_FEE_BPS = 500;
+/** Default creator fee split in basis points (50% of trade fee) */
+export const DEFAULT_CREATOR_FEE_SPLIT_BPS = 5_000;
 
-/** Maximum sell penalty BPS */
-export const MAX_SELL_PENALTY_BPS = 3_000;
+/** Maximum trade fee in basis points (5%) */
+export const MAX_TRADE_FEE_BPS = 500;
 
-/** Minimum TWAP interval (seconds) */
+// ── TWAP ────────────────────────────────────────────────────────────────
+
+/** Minimum TWAP interval in seconds */
 export const MIN_TWAP_INTERVAL = 10;
 
-/** Maximum TWAP interval (seconds) */
-export const MAX_TWAP_INTERVAL = 3_600;
+/** Maximum TWAP interval in seconds */
+export const MAX_TWAP_INTERVAL = 300;
 
-/** Minimum graduation reserve (lamports) */
-export const MIN_GRADUATION_RESERVE = 100_000_000; // 0.1 SOL
+// ── Market ──────────────────────────────────────────────────────────────
+
+/** Minimum market duration in seconds */
+export const MIN_MARKET_DURATION = 10;
+
+/** Default emergency window in seconds (24 hours) */
+export const DEFAULT_EMERGENCY_WINDOW = 86_400;
+
+// ── Graduation ──────────────────────────────────────────────────────────
+
+/** Graduation pool fee in basis points (0.25%) */
+export const GRADUATION_POOL_FEE_BPS = 25;
+
+/** Minimum graduation reserve in lamports (0.1 SOL) */
+export const MIN_GRADUATION_RESERVE = 100_000_000;
+
+// ── Meteora DAMM v2 ────────────────────────────────────────────────────
 
 /** Meteora DAMM v2 MIN_SQRT_PRICE */
 export const MIN_SQRT_PRICE = BigInt("4295048016");
 
 /** Meteora DAMM v2 MAX_SQRT_PRICE */
 export const MAX_SQRT_PRICE = BigInt("79226673521066979257578248091");
-
-/** Native SOL mint (wrapped SOL) */
-export { NATIVE_MINT } from "@solana/spl-token";
-
-/** Minimum market duration in seconds (matches on-chain constant) */
-export const MIN_MARKET_DURATION = 10;
-
-/** Metaplex Token Metadata program ID */
-export const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
-  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
-);
-
-/** Curve scaling factor (10^9) — matches on-chain CURVE_SCALE */
-export const CURVE_SCALE = 1_000_000_000;
-
-/** Base sell fee in basis points (1%) — always applied */
-export const BASE_SELL_FEE_BPS = 100;
-
-/** Default emergency window in seconds (24 hours) */
-export const DEFAULT_EMERGENCY_WINDOW = 86_400;

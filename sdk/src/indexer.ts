@@ -9,23 +9,25 @@ import { Duel } from "./types";
 import IDL_JSON from "../idl/duel.json";
 import { PROGRAM_ID } from "./constants";
 
-const IDL = IDL_JSON as unknown as Duel;
+const IDL = IDL_JSON as any;
 
-// ─── Event Types ───────────────────────────────────────────────────────
+// ── Event Types ───────────────────────────────────────────────────────
 
 export interface MarketCreatedEvent {
   market: PublicKey;
   authority: PublicKey;
   deadline: bigint;
-  battleTaxBps: number;
+  marketId: bigint;
+  quoteMint: PublicKey;
 }
 
 export interface TokensBoughtEvent {
   market: PublicKey;
   side: number;
   buyer: PublicKey;
-  solAmount: bigint;
+  quoteAmount: bigint;
   tokensReceived: bigint;
+  feeAmount: bigint;
   newPrice: bigint;
 }
 
@@ -34,8 +36,8 @@ export interface TokensSoldEvent {
   side: number;
   seller: PublicKey;
   tokenAmount: bigint;
-  solReceived: bigint;
-  penaltyApplied: bigint;
+  quoteReceived: bigint;
+  feeAmount: bigint;
   newPrice: bigint;
 }
 
@@ -52,16 +54,29 @@ export interface MarketResolvedEvent {
   winner: number;
   finalTwapA: bigint;
   finalTwapB: bigint;
-  transferAmount: bigint;
-  protocolFee: bigint;
-}
-
-export interface TokensGraduatedEvent {
-  market: PublicKey;
-  side: number;
+  loserReserveTransferred: bigint;
   dexPool: PublicKey;
   solSeeded: bigint;
   tokensSeeded: bigint;
+}
+
+export interface ConfigUpdatedEvent {
+  admin: PublicKey;
+  paused: boolean;
+  tradeFeeBps: number;
+  creatorFeeSplitBps: number;
+  marketCreationFee: bigint;
+}
+
+export interface MarketClosedEvent {
+  market: PublicKey;
+  authority: PublicKey;
+}
+
+export interface EmergencyResolvedEvent {
+  market: PublicKey;
+  resolver: PublicKey;
+  timestamp: bigint;
 }
 
 export type DuelEvent =
@@ -70,30 +85,31 @@ export type DuelEvent =
   | { name: "TokensSold"; data: TokensSoldEvent }
   | { name: "TwapSampled"; data: TwapSampledEvent }
   | { name: "MarketResolved"; data: MarketResolvedEvent }
-  | { name: "TokensGraduated"; data: TokensGraduatedEvent };
+  | { name: "ConfigUpdated"; data: ConfigUpdatedEvent }
+  | { name: "MarketClosed"; data: MarketClosedEvent }
+  | { name: "EmergencyResolved"; data: EmergencyResolvedEvent };
 
-// ─── Analytics State ───────────────────────────────────────────────────
+// ── Analytics State ───────────────────────────────────────────────────
 
 export interface MarketAnalytics {
   market: string;
   authority: string;
   deadline: number;
-  battleTaxBps: number;
   createdAt: number; // unix timestamp when we saw the event
   totalBuys: number;
   totalSells: number;
   totalVolumeSol: bigint;
   totalTokensTraded: bigint;
-  totalPenalties: bigint;
+  totalFees: bigint;
   uniqueTraders: Set<string>;
   twapSamples: number;
   resolved: boolean;
   winner: number | null;
   finalTwapA: bigint | null;
   finalTwapB: bigint | null;
-  protocolFee: bigint | null;
-  battleTaxCollected: bigint | null;
-  graduated: { side: number; dexPool: string; solSeeded: bigint; tokensSeeded: bigint }[];
+  dexPool: string | null;
+  solSeeded: bigint | null;
+  tokensSeeded: bigint | null;
   priceHistory: { side: number; price: bigint; timestamp: number }[];
 }
 
@@ -102,15 +118,13 @@ export interface GlobalAnalytics {
   totalBuys: number;
   totalSells: number;
   totalVolumeSol: bigint;
-  totalProtocolFees: bigint;
-  totalPenalties: bigint;
-  totalGraduations: number;
+  totalFees: bigint;
   marketsResolved: number;
   uniqueTraders: Set<string>;
   eventsProcessed: number;
 }
 
-// ─── Indexer Service ───────────────────────────────────────────────────
+// ── Indexer Service ───────────────────────────────────────────────────
 
 export type EventCallback = (event: DuelEvent, slot: number) => void;
 
@@ -129,9 +143,7 @@ export class DuelIndexer {
     totalBuys: 0,
     totalSells: 0,
     totalVolumeSol: BigInt(0),
-    totalProtocolFees: BigInt(0),
-    totalPenalties: BigInt(0),
-    totalGraduations: 0,
+    totalFees: BigInt(0),
     marketsResolved: 0,
     uniqueTraders: new Set(),
     eventsProcessed: 0,
@@ -260,9 +272,7 @@ export class DuelIndexer {
       totalBuys: number;
       totalSells: number;
       totalVolumeSol: string;
-      totalProtocolFees: string;
-      totalPenalties: string;
-      totalGraduations: number;
+      totalFees: string;
       marketsResolved: number;
       uniqueTraders: number;
       eventsProcessed: number;
@@ -277,8 +287,7 @@ export class DuelIndexer {
       uniqueTraders: number;
       resolved: boolean;
       winner: number | null;
-      protocolFee: string | null;
-      graduated: number;
+      dexPool: string | null;
     }[];
   } {
     return {
@@ -287,9 +296,7 @@ export class DuelIndexer {
         totalBuys: this.global.totalBuys,
         totalSells: this.global.totalSells,
         totalVolumeSol: this.global.totalVolumeSol.toString(),
-        totalProtocolFees: this.global.totalProtocolFees.toString(),
-        totalPenalties: this.global.totalPenalties.toString(),
-        totalGraduations: this.global.totalGraduations,
+        totalFees: this.global.totalFees.toString(),
         marketsResolved: this.global.marketsResolved,
         uniqueTraders: this.global.uniqueTraders.size,
         eventsProcessed: this.global.eventsProcessed,
@@ -304,13 +311,12 @@ export class DuelIndexer {
         uniqueTraders: m.uniqueTraders.size,
         resolved: m.resolved,
         winner: m.winner,
-        protocolFee: m.protocolFee?.toString() ?? null,
-        graduated: m.graduated.length,
+        dexPool: m.dexPool,
       })),
     };
   }
 
-  // ─── Internal ──────────────────────────────────────────────────────────
+  // ── Internal ──────────────────────────────────────────────────────────
 
   private mapEvent(event: Event): DuelEvent | null {
     switch (event.name) {
@@ -324,8 +330,12 @@ export class DuelIndexer {
         return { name: "TwapSampled", data: event.data as unknown as TwapSampledEvent };
       case "MarketResolved":
         return { name: "MarketResolved", data: event.data as unknown as MarketResolvedEvent };
-      case "TokensGraduated":
-        return { name: "TokensGraduated", data: event.data as unknown as TokensGraduatedEvent };
+      case "ConfigUpdated":
+        return { name: "ConfigUpdated", data: event.data as unknown as ConfigUpdatedEvent };
+      case "MarketClosed":
+        return { name: "MarketClosed", data: event.data as unknown as MarketClosedEvent };
+      case "EmergencyResolved":
+        return { name: "EmergencyResolved", data: event.data as unknown as EmergencyResolvedEvent };
       default:
         return null;
     }
@@ -337,22 +347,21 @@ export class DuelIndexer {
         market: marketKey,
         authority: "",
         deadline: 0,
-        battleTaxBps: 0,
         createdAt: Math.floor(Date.now() / 1000),
         totalBuys: 0,
         totalSells: 0,
         totalVolumeSol: BigInt(0),
         totalTokensTraded: BigInt(0),
-        totalPenalties: BigInt(0),
+        totalFees: BigInt(0),
         uniqueTraders: new Set(),
         twapSamples: 0,
         resolved: false,
         winner: null,
         finalTwapA: null,
         finalTwapB: null,
-        protocolFee: null,
-        battleTaxCollected: null,
-        graduated: [],
+        dexPool: null,
+        solSeeded: null,
+        tokensSeeded: null,
         priceHistory: [],
       });
     }
@@ -368,7 +377,6 @@ export class DuelIndexer {
         const m = this.getOrCreateMarket(d.market.toBase58());
         m.authority = d.authority.toBase58();
         m.deadline = Number(d.deadline);
-        m.battleTaxBps = d.battleTaxBps;
         m.createdAt = now;
         this.global.totalMarkets++;
         break;
@@ -379,8 +387,9 @@ export class DuelIndexer {
         const marketKey = d.market.toBase58();
         const m = this.getOrCreateMarket(marketKey);
         m.totalBuys++;
-        m.totalVolumeSol += BigInt(d.solAmount.toString());
+        m.totalVolumeSol += BigInt(d.quoteAmount.toString());
         m.totalTokensTraded += BigInt(d.tokensReceived.toString());
+        m.totalFees += BigInt(d.feeAmount.toString());
         m.uniqueTraders.add(d.buyer.toBase58());
         m.priceHistory.push({
           side: d.side,
@@ -389,7 +398,8 @@ export class DuelIndexer {
         });
 
         this.global.totalBuys++;
-        this.global.totalVolumeSol += BigInt(d.solAmount.toString());
+        this.global.totalVolumeSol += BigInt(d.quoteAmount.toString());
+        this.global.totalFees += BigInt(d.feeAmount.toString());
         this.global.uniqueTraders.add(d.buyer.toBase58());
         break;
       }
@@ -399,9 +409,9 @@ export class DuelIndexer {
         const marketKey = d.market.toBase58();
         const m = this.getOrCreateMarket(marketKey);
         m.totalSells++;
-        m.totalVolumeSol += BigInt(d.solReceived.toString());
+        m.totalVolumeSol += BigInt(d.quoteReceived.toString());
         m.totalTokensTraded += BigInt(d.tokenAmount.toString());
-        m.totalPenalties += BigInt(d.penaltyApplied.toString());
+        m.totalFees += BigInt(d.feeAmount.toString());
         m.uniqueTraders.add(d.seller.toBase58());
         m.priceHistory.push({
           side: d.side,
@@ -410,8 +420,8 @@ export class DuelIndexer {
         });
 
         this.global.totalSells++;
-        this.global.totalVolumeSol += BigInt(d.solReceived.toString());
-        this.global.totalPenalties += BigInt(d.penaltyApplied.toString());
+        this.global.totalVolumeSol += BigInt(d.quoteReceived.toString());
+        this.global.totalFees += BigInt(d.feeAmount.toString());
         this.global.uniqueTraders.add(d.seller.toBase58());
         break;
       }
@@ -430,27 +440,19 @@ export class DuelIndexer {
         m.winner = d.winner;
         m.finalTwapA = BigInt(d.finalTwapA.toString());
         m.finalTwapB = BigInt(d.finalTwapB.toString());
-        m.protocolFee = BigInt(d.protocolFee.toString());
-        m.battleTaxCollected = BigInt(d.transferAmount.toString());
+        m.dexPool = d.dexPool.toBase58();
+        m.solSeeded = BigInt(d.solSeeded.toString());
+        m.tokensSeeded = BigInt(d.tokensSeeded.toString());
 
         this.global.marketsResolved++;
-        this.global.totalProtocolFees += BigInt(d.protocolFee.toString());
         break;
       }
 
-      case "TokensGraduated": {
-        const d = event.data;
-        const m = this.getOrCreateMarket(d.market.toBase58());
-        m.graduated.push({
-          side: d.side,
-          dexPool: d.dexPool.toBase58(),
-          solSeeded: BigInt(d.solSeeded.toString()),
-          tokensSeeded: BigInt(d.tokensSeeded.toString()),
-        });
-
-        this.global.totalGraduations++;
+      case "ConfigUpdated":
+      case "MarketClosed":
+      case "EmergencyResolved":
+        // No market-specific analytics needed for these events
         break;
-      }
     }
   }
 }
