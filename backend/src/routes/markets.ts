@@ -63,17 +63,10 @@ marketRoutes.get("/:id", async (c) => {
     [id]
   );
 
-  // Get graduations
-  const grads = await db.query(
-    `SELECT * FROM graduations WHERE market_pubkey = $1`,
-    [id]
-  );
-
   return c.json({
     market,
     recentTrades: trades.rows,
     twapSamples: twap.rows,
-    graduations: grads.rows,
   });
 });
 

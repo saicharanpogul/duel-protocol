@@ -74,17 +74,6 @@ export async function insertTwapSample(data: Record<string, any>): Promise<void>
   );
 }
 
-export async function insertGraduation(data: Record<string, any>): Promise<void> {
-  const keys = Object.keys(data);
-  const values = Object.values(data);
-  const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
-
-  await query(
-    `INSERT INTO graduations (${keys.join(", ")}) VALUES (${placeholders})`,
-    values
-  );
-}
-
 // ─── Indexer State ────────────────────────────────────────────────
 
 export async function getState(key: string): Promise<string | null> {

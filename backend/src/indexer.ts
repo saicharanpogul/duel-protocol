@@ -67,7 +67,8 @@ async function handleEvent(name: string, data: any, slot: number): Promise<void>
           pubkey: data.market.toBase58(),
           authority: data.authority.toBase58(),
           deadline: Number(data.deadline),
-          battle_tax_bps: data.battleTaxBps,
+          market_id: data.marketId?.toString() ?? null,
+          quote_mint: data.quoteMint?.toBase58() ?? null,
           status: "active",
         });
         log("INFO", `MarketCreated: ${data.market.toBase58().slice(0, 8)}...`);
@@ -82,10 +83,10 @@ async function handleEvent(name: string, data: any, slot: number): Promise<void>
           side: data.side,
           trader: data.buyer.toBase58(),
           trade_type: "buy",
-          sol_amount: data.solAmount.toString(),
+          sol_amount: data.quoteAmount.toString(),
           token_amount: data.tokensReceived.toString(),
           price_after: data.newPrice.toString(),
-          penalty_applied: "0",
+          fee_amount: data.feeAmount?.toString() ?? "0",
           slot,
         });
         log("INFO", `TokensBought: ${data.buyer.toBase58().slice(0, 8)}...`, { slot });
@@ -98,10 +99,10 @@ async function handleEvent(name: string, data: any, slot: number): Promise<void>
           side: data.side,
           trader: data.seller.toBase58(),
           trade_type: "sell",
-          sol_amount: data.solReceived?.toString() ?? data.quoteReceived?.toString() ?? "0",
+          sol_amount: data.quoteReceived.toString(),
           token_amount: data.tokenAmount.toString(),
           price_after: data.newPrice.toString(),
-          penalty_applied: data.penaltyApplied?.toString() ?? "0",
+          fee_amount: data.feeAmount?.toString() ?? "0",
           slot,
         });
         log("INFO", `TokensSold: ${data.seller.toBase58().slice(0, 8)}...`, { slot });
@@ -127,28 +128,12 @@ async function handleEvent(name: string, data: any, slot: number): Promise<void>
           winner: data.winner,
           final_twap_a: data.finalTwapA.toString(),
           final_twap_b: data.finalTwapB.toString(),
-          battle_tax_collected: data.transferAmount.toString(),
-          protocol_fee_collected: data.protocolFee.toString(),
+          loser_reserve_transferred: data.loserReserveTransferred?.toString() ?? "0",
+          dex_pool: data.dexPool?.toBase58() ?? null,
+          sol_seeded: data.solSeeded?.toString() ?? "0",
+          tokens_seeded: data.tokensSeeded?.toString() ?? "0",
         });
         log("INFO", `MarketResolved: winner=side ${data.winner}`, { slot });
-        break;
-      }
-
-      case "TokensGraduated": {
-        await db.insertGraduation({
-          market_pubkey: data.market.toBase58(),
-          side: data.side,
-          dex_pool: data.dexPool.toBase58(),
-          sol_seeded: data.solSeeded.toString(),
-          tokens_seeded: data.tokensSeeded.toString(),
-          slot,
-        });
-        await db.upsertMarket({
-          pubkey: data.market.toBase58(),
-          graduated_side: data.side,
-          dex_pool: data.dexPool.toBase58(),
-        });
-        log("INFO", `TokensGraduated → ${data.dexPool.toBase58().slice(0, 8)}...`, { slot });
         break;
       }
     }
@@ -198,9 +183,6 @@ async function syncSingleMarket(marketPubkey: PublicKey): Promise<void> {
       pubkey: marketPubkey.toBase58(),
       authority: market.authority.toBase58(),
       deadline: Number(market.deadline),
-      battle_tax_bps: market.battleTaxBps,
-      protocol_fee_bps: market.protocolFeeBps,
-      sell_penalty_max_bps: market.sellPenaltyMaxBps,
       twap_window: Number(market.twapWindow),
       twap_interval: Number(market.twapInterval),
       status: getMarketStatus(market),
