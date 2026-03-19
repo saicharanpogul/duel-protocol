@@ -34,6 +34,12 @@
           "writable": true
         },
         {
+          "name": "token_mint",
+          "docs": [
+            "Token mint for the selected side (needed for transfer_checked)"
+          ]
+        },
+        {
           "name": "token_vault",
           "docs": [
             "Token vault for the selected side"
@@ -48,19 +54,68 @@
           "writable": true
         },
         {
-          "name": "sol_vault",
+          "name": "quote_mint",
           "docs": [
-            "SOL vault for the selected side"
+            "Quote token mint (WSOL)"
+          ]
+        },
+        {
+          "name": "quote_vault",
+          "docs": [
+            "Quote vault for the selected side"
           ],
           "writable": true
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "name": "buyer_quote_account",
+          "docs": [
+            "Buyer's quote token account (WSOL ATA)"
+          ],
+          "writable": true
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "protocol_fee_account",
+          "docs": [
+            "Protocol fee recipient (WSOL token account)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "creator_fee_account",
+          "docs": [
+            "Creator fee recipient (WSOL token account)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Protocol config (pause check + fee rates)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "quote_token_program",
+          "docs": [
+            "Quote token program (may differ for Token-2022)"
+          ]
         }
       ],
       "args": [
@@ -69,7 +124,7 @@
           "type": "u8"
         },
         {
-          "name": "sol_amount",
+          "name": "quote_amount",
           "type": "u64"
         },
         {
@@ -79,22 +134,162 @@
       ]
     },
     {
-      "name": "graduate_to_dex",
+      "name": "claim_pool_fees",
       "discriminator": [
-        83,
-        110,
-        46,
-        201,
-        206,
-        12,
-        95,
-        44
+        33,
+        187,
+        125,
+        186,
+        41,
+        247,
+        236,
+        89
       ],
       "accounts": [
         {
           "name": "authority",
           "docs": [
-            "Market creator or permissionless resolver"
+            "Market creator or protocol admin"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market"
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Protocol config (for admin check)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_mint",
+          "docs": [
+            "Token mint for the winning side"
+          ]
+        },
+        {
+          "name": "wsol_mint",
+          "docs": [
+            "WSOL mint"
+          ]
+        },
+        {
+          "name": "pool_authority",
+          "docs": [
+            "Pool authority (const PDA of DAMM v2)"
+          ]
+        },
+        {
+          "name": "pool",
+          "docs": [
+            "Meteora pool"
+          ]
+        },
+        {
+          "name": "position",
+          "docs": [
+            "Position PDA"
+          ],
+          "writable": true
+        },
+        {
+          "name": "fee_receiver_token_a",
+          "docs": [
+            "Fee receiver's token A account (receives claimed token fees)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "fee_receiver_token_b",
+          "docs": [
+            "Fee receiver's token B account (receives claimed WSOL fees)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_a_vault",
+          "docs": [
+            "Pool's token A vault"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_b_vault",
+          "docs": [
+            "Pool's token B vault"
+          ],
+          "writable": true
+        },
+        {
+          "name": "position_nft_account",
+          "docs": [
+            "Position NFT token account (market PDA is the authority)"
+          ]
+        },
+        {
+          "name": "token_a_program",
+          "docs": [
+            "Token A program"
+          ]
+        },
+        {
+          "name": "token_b_program",
+          "docs": [
+            "Token B program"
+          ]
+        },
+        {
+          "name": "event_authority",
+          "docs": [
+            "Event authority PDA of DAMM v2"
+          ]
+        },
+        {
+          "name": "meteora_program",
+          "docs": [
+            "Meteora DAMM v2 program"
+          ]
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_market",
+      "discriminator": [
+        88,
+        154,
+        248,
+        186,
+        48,
+        14,
+        123,
+        244
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Market creator or protocol admin"
           ],
           "writable": true,
           "signer": true
@@ -104,121 +299,225 @@
           "writable": true
         },
         {
-          "name": "side_account",
-          "docs": [
-            "Side account being graduated"
-          ],
+          "name": "side_a",
           "writable": true
         },
         {
-          "name": "token_mint",
-          "docs": [
-            "Token mint for this side"
-          ],
+          "name": "side_b",
           "writable": true
         },
         {
-          "name": "token_vault",
+          "name": "config",
           "docs": [
-            "Token vault for this side (source of tokens to seed pool)"
+            "Protocol config (for admin check)"
           ],
-          "writable": true
-        },
-        {
-          "name": "sol_vault",
-          "docs": [
-            "SOL vault for this side (source of SOL to seed pool)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "wsol_mint",
-          "docs": [
-            "WSOL mint (So11111111111111111111111111111111111111112)"
-          ]
-        },
-        {
-          "name": "pool",
-          "docs": [
-            "Meteora pool account (PDA created by Meteora)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "pool_authority",
-          "docs": [
-            "Pool authority (PDA derived by Meteora)"
-          ]
-        },
-        {
-          "name": "pool_token_a_vault",
-          "docs": [
-            "Pool's token A vault"
-          ],
-          "writable": true
-        },
-        {
-          "name": "pool_token_b_vault",
-          "docs": [
-            "Pool's token B vault (WSOL)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "lp_mint",
-          "docs": [
-            "LP token mint"
-          ],
-          "writable": true
-        },
-        {
-          "name": "creator_token_a",
-          "docs": [
-            "Market PDA's token account for seeding the pool (token A)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "creator_token_b",
-          "docs": [
-            "Market PDA's WSOL account for seeding the pool (token B)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "creator_lp_token",
-          "docs": [
-            "Market PDA's LP token account to receive LP tokens"
-          ],
-          "writable": true
-        },
-        {
-          "name": "meteora_program",
-          "docs": [
-            "Meteora DAMM v2 program"
-          ]
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
-        },
-        {
-          "name": "rent",
-          "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
       "args": [
         {
           "name": "side",
           "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "close_quote_vault",
+      "discriminator": [
+        35,
+        15,
+        73,
+        197,
+        180,
+        181,
+        218,
+        189
+      ],
+      "accounts": [
+        {
+          "name": "closer",
+          "docs": [
+            "Anyone can close -- rent goes to rent_receiver"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market"
+        },
+        {
+          "name": "side_account"
+        },
+        {
+          "name": "quote_vault",
+          "docs": [
+            "Quote vault to close"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_vault",
+          "docs": [
+            "Token vault to close (optional -- only if empty)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "rent_receiver",
+          "docs": [
+            "Receives rent from closed accounts"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "quote_token_program",
+          "docs": [
+            "Quote token program (may differ for Token-2022)"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "side",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "emergency_resolve",
+      "discriminator": [
+        63,
+        112,
+        185,
+        42,
+        47,
+        61,
+        232,
+        79
+      ],
+      "accounts": [
+        {
+          "name": "resolver",
+          "docs": [
+            "Anyone can trigger emergency resolution after the window passes"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Protocol config"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "side_a",
+          "writable": true
+        },
+        {
+          "name": "side_b",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_config",
+      "discriminator": [
+        208,
+        127,
+        21,
+        1,
+        194,
+        190,
+        196,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "protocol_fee_account"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "trade_fee_bps",
+          "type": "u16"
+        },
+        {
+          "name": "creator_fee_split_bps",
+          "type": "u16"
+        },
+        {
+          "name": "market_creation_fee",
+          "type": "u64"
         }
       ]
     },
@@ -292,23 +591,269 @@
           "writable": true
         },
         {
-          "name": "sol_vault_a",
+          "name": "quote_mint",
           "docs": [
-            "SOL vault for Side A (program-owned PDA)"
+            "Quote token mint (WSOL)"
+          ]
+        },
+        {
+          "name": "quote_token_program",
+          "docs": [
+            "Quote token program (may differ from side token program for Token-2022)"
+          ]
+        },
+        {
+          "name": "quote_vault_a",
+          "docs": [
+            "Quote vault for Side A"
           ],
           "writable": true
         },
         {
-          "name": "sol_vault_b",
+          "name": "quote_vault_b",
           "docs": [
-            "SOL vault for Side B (program-owned PDA)"
+            "Quote vault for Side B"
           ],
           "writable": true
         },
         {
-          "name": "protocol_fee_account",
+          "name": "protocol_fee_account"
+        },
+        {
+          "name": "config",
           "docs": [
-            "Protocol fee recipient"
+            "Program config (pause check + market creation fee)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "metadata_a",
+          "docs": [
+            "Metadata account for token A"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  11,
+                  112,
+                  101,
+                  177,
+                  227,
+                  209,
+                  124,
+                  69,
+                  56,
+                  157,
+                  82,
+                  127,
+                  107,
+                  4,
+                  195,
+                  205,
+                  88,
+                  184,
+                  108,
+                  115,
+                  26,
+                  160,
+                  253,
+                  181,
+                  73,
+                  182,
+                  209,
+                  188,
+                  3,
+                  248,
+                  41,
+                  70
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_mint_a"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                11,
+                112,
+                101,
+                177,
+                227,
+                209,
+                124,
+                69,
+                56,
+                157,
+                82,
+                127,
+                107,
+                4,
+                195,
+                205,
+                88,
+                184,
+                108,
+                115,
+                26,
+                160,
+                253,
+                181,
+                73,
+                182,
+                209,
+                188,
+                3,
+                248,
+                41,
+                70
+              ]
+            }
+          }
+        },
+        {
+          "name": "metadata_b",
+          "docs": [
+            "Metadata account for token B"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  11,
+                  112,
+                  101,
+                  177,
+                  227,
+                  209,
+                  124,
+                  69,
+                  56,
+                  157,
+                  82,
+                  127,
+                  107,
+                  4,
+                  195,
+                  205,
+                  88,
+                  184,
+                  108,
+                  115,
+                  26,
+                  160,
+                  253,
+                  181,
+                  73,
+                  182,
+                  209,
+                  188,
+                  3,
+                  248,
+                  41,
+                  70
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_mint_b"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                11,
+                112,
+                101,
+                177,
+                227,
+                209,
+                124,
+                69,
+                56,
+                157,
+                82,
+                127,
+                107,
+                4,
+                195,
+                205,
+                88,
+                184,
+                108,
+                115,
+                26,
+                160,
+                253,
+                181,
+                73,
+                182,
+                209,
+                188,
+                3,
+                248,
+                41,
+                70
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_metadata_program",
+          "docs": [
+            "Metaplex Token Metadata Program"
+          ]
+        },
+        {
+          "name": "creator_fee_account",
+          "docs": [
+            "Creator fee recipient -- must be a valid account"
           ]
         },
         {
@@ -316,8 +861,7 @@
           "address": "11111111111111111111111111111111"
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "token_program"
         },
         {
           "name": "rent",
@@ -342,32 +886,28 @@
           "type": "u64"
         },
         {
-          "name": "battle_tax_bps",
-          "type": "u16"
+          "name": "name_a",
+          "type": "string"
         },
         {
-          "name": "protocol_fee_bps",
-          "type": "u16"
+          "name": "symbol_a",
+          "type": "string"
         },
         {
-          "name": "sell_penalty_max_bps",
-          "type": "u16"
+          "name": "uri_a",
+          "type": "string"
         },
         {
-          "name": "protection_activation_offset",
-          "type": "u64"
+          "name": "name_b",
+          "type": "string"
         },
         {
-          "name": "curve_params",
-          "type": {
-            "defined": {
-              "name": "CurveParams"
-            }
-          }
+          "name": "symbol_b",
+          "type": "string"
         },
         {
-          "name": "total_supply_per_side",
-          "type": "u64"
+          "name": "uri_b",
+          "type": "string"
         }
       ]
     },
@@ -407,28 +947,47 @@
       "args": []
     },
     {
-      "name": "resolve_market",
+      "name": "resolve_and_graduate",
       "discriminator": [
-        155,
-        23,
-        80,
-        173,
-        46,
-        74,
-        23,
-        239
+        134,
+        101,
+        115,
+        132,
+        222,
+        205,
+        69,
+        106
       ],
       "accounts": [
         {
           "name": "resolver",
-          "docs": [
-            "Anyone can resolve (permissionless)"
-          ],
+          "writable": true,
           "signer": true
         },
         {
           "name": "market",
           "writable": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Protocol config"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "side_a",
@@ -439,32 +998,111 @@
           "writable": true
         },
         {
-          "name": "sol_vault_a",
+          "name": "quote_vault_a",
+          "writable": true
+        },
+        {
+          "name": "quote_vault_b",
+          "writable": true
+        },
+        {
+          "name": "token_vault_a",
+          "writable": true
+        },
+        {
+          "name": "token_vault_b",
+          "writable": true
+        },
+        {
+          "name": "token_mint_a",
+          "writable": true
+        },
+        {
+          "name": "token_mint_b",
+          "writable": true
+        },
+        {
+          "name": "quote_mint"
+        },
+        {
+          "name": "market_token_ata",
           "docs": [
-            "SOL vault for Side A"
+            "Market PDA's ATA for winning side tokens (pre-created by caller)"
           ],
           "writable": true
         },
         {
-          "name": "sol_vault_b",
+          "name": "market_wsol_ata",
           "docs": [
-            "SOL vault for Side B"
+            "Market PDA's WSOL ATA (pre-created by caller)"
           ],
           "writable": true
         },
         {
-          "name": "protocol_fee_account",
-          "docs": [
-            "Protocol fee recipient"
-          ],
+          "name": "pool",
           "writable": true
+        },
+        {
+          "name": "position_nft_mint",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "position_nft_account",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "pool_token_vault_a",
+          "writable": true
+        },
+        {
+          "name": "pool_token_vault_b",
+          "writable": true
+        },
+        {
+          "name": "pool_authority"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "meteora_program"
+        },
+        {
+          "name": "losing_token_metadata",
+          "writable": true
+        },
+        {
+          "name": "token_metadata_program"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "quote_token_program"
+        },
+        {
+          "name": "token_2022_program"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "expected_winner",
+          "type": "u8"
+        }
+      ]
     },
     {
       "name": "sell_post_resolution",
@@ -485,11 +1123,18 @@
           "signer": true
         },
         {
-          "name": "market"
+          "name": "market",
+          "writable": true
         },
         {
           "name": "side_account",
           "writable": true
+        },
+        {
+          "name": "token_mint",
+          "docs": [
+            "Token mint for the selected side (needed for transfer_checked)"
+          ]
         },
         {
           "name": "token_vault",
@@ -506,19 +1151,54 @@
           "writable": true
         },
         {
-          "name": "sol_vault",
+          "name": "quote_mint",
           "docs": [
-            "SOL vault for the selected side"
+            "Quote token mint"
+          ]
+        },
+        {
+          "name": "quote_vault",
+          "docs": [
+            "Quote vault for the selected side"
           ],
           "writable": true
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "name": "seller_quote_account",
+          "docs": [
+            "Seller's quote token account"
+          ],
+          "writable": true
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "config",
+          "docs": [
+            "Protocol config (pause check)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "quote_token_program",
+          "docs": [
+            "Quote token program"
+          ]
         }
       ],
       "args": [
@@ -531,7 +1211,7 @@
           "type": "u64"
         },
         {
-          "name": "min_sol_out",
+          "name": "min_quote_out",
           "type": "u64"
         }
       ]
@@ -563,6 +1243,12 @@
           "writable": true
         },
         {
+          "name": "token_mint",
+          "docs": [
+            "Token mint for the selected side (needed for transfer_checked)"
+          ]
+        },
+        {
           "name": "token_vault",
           "docs": [
             "Token vault for the selected side"
@@ -577,19 +1263,68 @@
           "writable": true
         },
         {
-          "name": "sol_vault",
+          "name": "quote_mint",
           "docs": [
-            "SOL vault for the selected side"
+            "Quote token mint"
+          ]
+        },
+        {
+          "name": "quote_vault",
+          "docs": [
+            "Quote vault for the selected side"
           ],
           "writable": true
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "name": "seller_quote_account",
+          "docs": [
+            "Seller's quote token account"
+          ],
+          "writable": true
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "protocol_fee_account",
+          "docs": [
+            "Protocol fee recipient (WSOL token account)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "creator_fee_account",
+          "docs": [
+            "Creator fee recipient (WSOL token account)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Protocol config (pause check + fee rates)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "quote_token_program",
+          "docs": [
+            "Quote token program"
+          ]
         }
       ],
       "args": [
@@ -602,8 +1337,86 @@
           "type": "u64"
         },
         {
-          "name": "min_sol_out",
+          "name": "min_quote_out",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "update_config",
+      "discriminator": [
+        29,
+        158,
+        252,
+        191,
+        10,
+        83,
+        219,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "new_protocol_fee_account",
+          "optional": true
+        },
+        {
+          "name": "new_admin",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": {
+            "option": "bool"
+          }
+        },
+        {
+          "name": "trade_fee_bps",
+          "type": {
+            "option": "u16"
+          }
+        },
+        {
+          "name": "creator_fee_split_bps",
+          "type": {
+            "option": "u16"
+          }
+        },
+        {
+          "name": "market_creation_fee",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "min_market_duration",
+          "type": {
+            "option": "u64"
+          }
         }
       ]
     }
@@ -623,6 +1436,19 @@
       ]
     },
     {
+      "name": "ProgramConfig",
+      "discriminator": [
+        196,
+        210,
+        90,
+        231,
+        144,
+        149,
+        140,
+        63
+      ]
+    },
+    {
       "name": "Side",
       "discriminator": [
         152,
@@ -634,22 +1460,48 @@
         47,
         183
       ]
-    },
-    {
-      "name": "SolVault",
-      "discriminator": [
-        21,
-        132,
-        230,
-        103,
-        19,
-        209,
-        129,
-        248
-      ]
     }
   ],
   "events": [
+    {
+      "name": "ConfigUpdated",
+      "discriminator": [
+        40,
+        241,
+        230,
+        122,
+        11,
+        19,
+        198,
+        194
+      ]
+    },
+    {
+      "name": "EmergencyResolved",
+      "discriminator": [
+        40,
+        211,
+        201,
+        14,
+        244,
+        64,
+        175,
+        239
+      ]
+    },
+    {
+      "name": "MarketClosed",
+      "discriminator": [
+        86,
+        91,
+        119,
+        43,
+        94,
+        0,
+        217,
+        113
+      ]
+    },
     {
       "name": "MarketCreated",
       "discriminator": [
@@ -687,19 +1539,6 @@
         30,
         249,
         190
-      ]
-    },
-    {
-      "name": "TokensGraduated",
-      "discriminator": [
-        5,
-        121,
-        149,
-        210,
-        62,
-        223,
-        221,
-        24
       ]
     },
     {
@@ -792,56 +1631,95 @@
     },
     {
       "code": 6012,
-      "name": "InvalidCurveParams",
-      "msg": "Invalid curve parameters"
-    },
-    {
-      "code": 6013,
       "name": "InvalidMarketConfig",
       "msg": "Invalid market configuration"
     },
     {
-      "code": 6014,
+      "code": 6013,
       "name": "MathOverflow",
       "msg": "Math overflow"
     },
     {
+      "code": 6014,
+      "name": "ProtocolPaused",
+      "msg": "Protocol is paused"
+    },
+    {
       "code": 6015,
-      "name": "AlreadyGraduated",
-      "msg": "Side already graduated to DEX"
+      "name": "InvalidFeeConfig",
+      "msg": "Invalid fee configuration"
     },
     {
       "code": 6016,
+      "name": "ReentrancyLocked",
+      "msg": "Market is currently locked (re-entrancy protection)"
+    },
+    {
+      "code": 6017,
+      "name": "EmergencyResolveTooEarly",
+      "msg": "Emergency resolution window has not passed yet"
+    },
+    {
+      "code": 6018,
+      "name": "WinnerMismatch",
+      "msg": "Expected winner does not match TWAP result"
+    },
+    {
+      "code": 6019,
+      "name": "EmergencyOnlyOperation",
+      "msg": "This operation is only available for emergency-resolved (draw) markets"
+    },
+    {
+      "code": 6020,
       "name": "InsufficientReserveForGraduation",
-      "msg": "Insufficient reserve for DEX graduation"
+      "msg": "Insufficient reserve for DEX graduation (minimum 0.1 SOL)"
     }
   ],
   "types": [
     {
-      "name": "CurveParams",
+      "name": "ConfigUpdated",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "a",
-            "docs": [
-              "Steepness coefficient (scaled by 10^9)"
-            ],
-            "type": "u64"
+            "name": "admin",
+            "type": "pubkey"
           },
           {
-            "name": "n",
-            "docs": [
-              "Exponent (1 = linear, 2 = quadratic, 3 = cubic)"
-            ],
-            "type": "u8"
+            "name": "paused",
+            "type": "bool"
           },
           {
-            "name": "b",
-            "docs": [
-              "Base price in lamports"
-            ],
+            "name": "trade_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "creator_fee_split_bps",
+            "type": "u16"
+          },
+          {
+            "name": "market_creation_fee",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EmergencyResolved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "resolver",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
           }
         ]
       }
@@ -851,6 +1729,20 @@
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Account version for future upgrades"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          },
           {
             "name": "authority",
             "docs": [
@@ -880,6 +1772,13 @@
             "type": "pubkey"
           },
           {
+            "name": "quote_mint",
+            "docs": [
+              "Quote token mint (WSOL)"
+            ],
+            "type": "pubkey"
+          },
+          {
             "name": "deadline",
             "docs": [
               "Unix timestamp deadline"
@@ -901,43 +1800,18 @@
             "type": "u64"
           },
           {
-            "name": "battle_tax_bps",
+            "name": "creator_fee_account",
             "docs": [
-              "Battle tax in basis points (0-10000)"
+              "Creator fee recipient"
             ],
-            "type": "u16"
+            "type": "pubkey"
           },
           {
-            "name": "protocol_fee_bps",
+            "name": "protocol_fee_account",
             "docs": [
-              "Protocol fee in basis points (0-500)"
+              "Protocol fee recipient"
             ],
-            "type": "u16"
-          },
-          {
-            "name": "sell_penalty_max_bps",
-            "docs": [
-              "Max sell penalty in basis points (0-3000)"
-            ],
-            "type": "u16"
-          },
-          {
-            "name": "protection_activation_offset",
-            "docs": [
-              "Seconds before deadline when sell penalty activates"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "curve_params",
-            "docs": [
-              "Bonding curve parameters"
-            ],
-            "type": {
-              "defined": {
-                "name": "CurveParams"
-              }
-            }
+            "type": "pubkey"
           },
           {
             "name": "status",
@@ -967,7 +1841,7 @@
           {
             "name": "winner",
             "docs": [
-              "Winner side index (0 = A, 1 = B), None if not resolved"
+              "Winner side index (0 = A, 1 = B), None if not resolved or emergency draw"
             ],
             "type": {
               "option": "u8"
@@ -976,7 +1850,7 @@
           {
             "name": "final_twap_a",
             "docs": [
-              "Final TWAP for side A (lamports, price * 10^9 for precision)"
+              "Final TWAP for side A"
             ],
             "type": "u64"
           },
@@ -988,32 +1862,46 @@
             "type": "u64"
           },
           {
-            "name": "protocol_fee_account",
+            "name": "emergency_window",
             "docs": [
-              "Protocol fee recipient"
+              "Emergency resolution window in seconds after deadline"
             ],
+            "type": "u64"
+          },
+          {
+            "name": "locked",
+            "docs": [
+              "Re-entrancy lock"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "_reserved",
+            "docs": [
+              "Reserved for future fields"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
             "type": "pubkey"
           },
           {
-            "name": "graduated_a",
-            "docs": [
-              "Whether Side A has graduated to DEX"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "graduated_b",
-            "docs": [
-              "Whether Side B has graduated to DEX"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "bump",
-            "docs": [
-              "PDA bump"
-            ],
-            "type": "u8"
+            "name": "authority",
+            "type": "pubkey"
           }
         ]
       }
@@ -1036,14 +1924,21 @@
             "type": "i64"
           },
           {
-            "name": "battle_tax_bps",
-            "type": "u16"
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "quote_mint",
+            "type": "pubkey"
           }
         ]
       }
     },
     {
       "name": "MarketResolved",
+      "docs": [
+        "Emitted when market resolves and graduates to DEX atomically"
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1064,11 +1959,19 @@
             "type": "u64"
           },
           {
-            "name": "transfer_amount",
+            "name": "loser_reserve_transferred",
             "type": "u64"
           },
           {
-            "name": "protocol_fee",
+            "name": "dex_pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "sol_seeded",
+            "type": "u64"
+          },
+          {
+            "name": "tokens_seeded",
             "type": "u64"
           }
         ]
@@ -1087,6 +1990,86 @@
           },
           {
             "name": "Resolved"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProgramConfig",
+      "docs": [
+        "Global protocol configuration, owned by admin.",
+        "PDA: [b\"config\"]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "docs": [
+              "Admin authority (can pause, update config, transfer admin)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "docs": [
+              "Emergency pause flag"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "protocol_fee_account",
+            "docs": [
+              "Protocol fee recipient (WSOL token account)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "market_creation_fee",
+            "docs": [
+              "Market creation fee in lamports (0 = free)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "min_market_duration",
+            "docs": [
+              "Minimum market duration in seconds"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "trade_fee_bps",
+            "docs": [
+              "Trade fee in basis points (applied to every buy/sell)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "creator_fee_split_bps",
+            "docs": [
+              "Creator's share of trade fee in basis points (e.g., 5000 = 50%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "_reserved",
+            "docs": [
+              "Reserved for future fields"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
           }
         ]
       }
@@ -1125,9 +2108,9 @@
             "type": "pubkey"
           },
           {
-            "name": "sol_reserve_vault",
+            "name": "quote_reserve_vault",
             "docs": [
-              "Vault holding SOL from buys"
+              "Vault holding quote tokens (WSOL) from buys"
             ],
             "type": "pubkey"
           },
@@ -1146,13 +2129,6 @@
             "type": "u64"
           },
           {
-            "name": "peak_reserve",
-            "docs": [
-              "Historical max SOL reserve (for sell penalty calc)"
-            ],
-            "type": "u64"
-          },
-          {
             "name": "twap_accumulator",
             "docs": [
               "Sum of price samples for TWAP (u128 to prevent overflow)"
@@ -1165,19 +2141,20 @@
               "PDA bump"
             ],
             "type": "u8"
+          },
+          {
+            "name": "_reserved",
+            "docs": [
+              "Reserved for future fields"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
-      }
-    },
-    {
-      "name": "SolVault",
-      "docs": [
-        "Zero-data account owned by the program to hold SOL reserves.",
-        "Using a program-owned account allows the program to debit lamports."
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": []
       }
     },
     {
@@ -1198,7 +2175,7 @@
             "type": "pubkey"
           },
           {
-            "name": "sol_amount",
+            "name": "quote_amount",
             "type": "u64"
           },
           {
@@ -1206,35 +2183,11 @@
             "type": "u64"
           },
           {
+            "name": "fee_amount",
+            "type": "u64"
+          },
+          {
             "name": "new_price",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "TokensGraduated",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "side",
-            "type": "u8"
-          },
-          {
-            "name": "dex_pool",
-            "type": "pubkey"
-          },
-          {
-            "name": "sol_seeded",
-            "type": "u64"
-          },
-          {
-            "name": "tokens_seeded",
             "type": "u64"
           }
         ]
@@ -1262,11 +2215,11 @@
             "type": "u64"
           },
           {
-            "name": "sol_received",
+            "name": "quote_received",
             "type": "u64"
           },
           {
-            "name": "penalty_applied",
+            "name": "fee_amount",
             "type": "u64"
           },
           {
