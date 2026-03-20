@@ -62,7 +62,7 @@ export type Duel = {
         {
           "name": "quoteMint",
           "docs": [
-            "Quote token mint (WSOL, USDC, etc.)"
+            "Quote token mint (WSOL)"
           ]
         },
         {
@@ -75,14 +75,28 @@ export type Duel = {
         {
           "name": "buyerQuoteAccount",
           "docs": [
-            "Buyer's quote token account (WSOL ATA, USDC ATA, etc.)"
+            "Buyer's quote token account (WSOL ATA)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "protocolFeeAccount",
+          "docs": [
+            "Protocol fee recipient (WSOL token account)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "creatorFeeAccount",
+          "docs": [
+            "Creator fee recipient (WSOL token account)"
           ],
           "writable": true
         },
         {
           "name": "config",
           "docs": [
-            "Protocol config (pause check)"
+            "Protocol config (pause check + fee rates)"
           ],
           "pda": {
             "seeds": [
@@ -116,7 +130,7 @@ export type Duel = {
           "type": "u8"
         },
         {
-          "name": "solAmount",
+          "name": "quoteAmount",
           "type": "u64"
         },
         {
@@ -171,15 +185,9 @@ export type Duel = {
           }
         },
         {
-          "name": "sideAccount",
-          "docs": [
-            "Side account being claimed for"
-          ]
-        },
-        {
           "name": "tokenMint",
           "docs": [
-            "Token mint for this side"
+            "Token mint for the winning side"
           ]
         },
         {
@@ -269,12 +277,7 @@ export type Duel = {
           "name": "tokenProgram"
         }
       ],
-      "args": [
-        {
-          "name": "side",
-          "type": "u8"
-        }
-      ]
+      "args": []
     },
     {
       "name": "closeMarket",
@@ -343,121 +346,6 @@ export type Duel = {
       ]
     },
     {
-      "name": "closePosition",
-      "discriminator": [
-        123,
-        134,
-        81,
-        0,
-        49,
-        68,
-        98,
-        98
-      ],
-      "accounts": [
-        {
-          "name": "authority",
-          "docs": [
-            "Market creator or protocol admin"
-          ],
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "market"
-        },
-        {
-          "name": "config",
-          "docs": [
-            "Protocol config (for admin check)"
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "sideAccount"
-        },
-        {
-          "name": "positionNftMint",
-          "docs": [
-            "Position NFT mint (mut)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "positionNftAccount",
-          "docs": [
-            "Position NFT token account (mut)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "pool",
-          "docs": [
-            "Pool (mut)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "position",
-          "docs": [
-            "Position (mut, close)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "poolAuthority",
-          "docs": [
-            "Pool authority"
-          ]
-        },
-        {
-          "name": "rentReceiver",
-          "docs": [
-            "Rent receiver"
-          ],
-          "writable": true
-        },
-        {
-          "name": "token2022Program",
-          "docs": [
-            "Token-2022 program (for NFT burning)"
-          ]
-        },
-        {
-          "name": "eventAuthority",
-          "docs": [
-            "Event authority PDA"
-          ]
-        },
-        {
-          "name": "meteoraProgram",
-          "docs": [
-            "Meteora DAMM v2 program"
-          ]
-        }
-      ],
-      "args": [
-        {
-          "name": "side",
-          "type": "u8"
-        }
-      ]
-    },
-    {
       "name": "closeQuoteVault",
       "discriminator": [
         35,
@@ -473,7 +361,7 @@ export type Duel = {
         {
           "name": "closer",
           "docs": [
-            "Anyone can close — rent goes to rent_receiver"
+            "Anyone can close -- rent goes to rent_receiver"
           ],
           "writable": true,
           "signer": true
@@ -494,7 +382,7 @@ export type Duel = {
         {
           "name": "tokenVault",
           "docs": [
-            "Token vault to close (optional — only if empty)"
+            "Token vault to close (optional -- only if empty)"
           ],
           "writable": true
         },
@@ -580,189 +468,6 @@ export type Duel = {
       "args": []
     },
     {
-      "name": "graduateToDex",
-      "discriminator": [
-        83,
-        110,
-        46,
-        201,
-        206,
-        12,
-        95,
-        44
-      ],
-      "accounts": [
-        {
-          "name": "authority",
-          "docs": [
-            "Market creator or permissionless caller — pays rent for new accounts"
-          ],
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "market",
-          "writable": true
-        },
-        {
-          "name": "sideAccount",
-          "docs": [
-            "Side account being graduated"
-          ],
-          "writable": true
-        },
-        {
-          "name": "tokenMint",
-          "docs": [
-            "Token mint for this side"
-          ],
-          "writable": true
-        },
-        {
-          "name": "tokenVault",
-          "docs": [
-            "Token vault for this side (source of tokens to seed pool)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "quoteMint",
-          "docs": [
-            "Quote token mint"
-          ]
-        },
-        {
-          "name": "quoteVault",
-          "docs": [
-            "Quote vault — checked for minimum reserve"
-          ],
-          "writable": true
-        },
-        {
-          "name": "quoteTokenProgram",
-          "docs": [
-            "Quote token program"
-          ]
-        },
-        {
-          "name": "wsolMint",
-          "docs": [
-            "WSOL mint (So11111111111111111111111111111111111111112)"
-          ]
-        },
-        {
-          "name": "positionNftMint",
-          "docs": [
-            "Position NFT mint — a new keypair, signer"
-          ],
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "positionNftAccount",
-          "docs": [
-            "Position NFT token account — PDA: [\"position_nft_account\", position_nft_mint]"
-          ],
-          "writable": true
-        },
-        {
-          "name": "poolAuthority",
-          "docs": [
-            "Pool authority (const PDA of DAMM v2)"
-          ]
-        },
-        {
-          "name": "pool",
-          "docs": [
-            "Meteora pool PDA: [\"customizable_pool\", max(mintA, mintB), min(mintA, mintB)]"
-          ],
-          "writable": true
-        },
-        {
-          "name": "position",
-          "docs": [
-            "Position PDA: [\"position\", position_nft_mint]"
-          ],
-          "writable": true
-        },
-        {
-          "name": "tokenAVault",
-          "docs": [
-            "Token A vault for the pool — PDA: [\"token_vault\", token_a_mint, pool]"
-          ],
-          "writable": true
-        },
-        {
-          "name": "tokenBVault",
-          "docs": [
-            "Token B vault for the pool — PDA: [\"token_vault\", token_b_mint, pool]"
-          ],
-          "writable": true
-        },
-        {
-          "name": "payerTokenA",
-          "docs": [
-            "Market PDA's token A account (pre-created, holds tokens to seed)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "payerTokenB",
-          "docs": [
-            "Market PDA's WSOL account (pre-created and funded with wrapped SOL)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "tokenAProgram",
-          "docs": [
-            "Token A's token program (SPL Token or Token-2022)"
-          ]
-        },
-        {
-          "name": "tokenBProgram",
-          "docs": [
-            "Token B's token program (SPL Token for WSOL)"
-          ]
-        },
-        {
-          "name": "token2022Program",
-          "docs": [
-            "Token-2022 program (for position NFT)"
-          ]
-        },
-        {
-          "name": "eventAuthority",
-          "docs": [
-            "Event authority PDA: [\"__event_authority\"] of DAMM v2"
-          ]
-        },
-        {
-          "name": "meteoraProgram",
-          "docs": [
-            "Meteora DAMM v2 program"
-          ]
-        },
-        {
-          "name": "tokenProgram"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "side",
-          "type": "u8"
-        }
-      ]
-    },
-    {
       "name": "initializeConfig",
       "discriminator": [
         208,
@@ -809,7 +514,11 @@ export type Duel = {
       ],
       "args": [
         {
-          "name": "defaultProtocolFeeBps",
+          "name": "tradeFeeBps",
+          "type": "u16"
+        },
+        {
+          "name": "creatorFeeSplitBps",
           "type": "u16"
         },
         {
@@ -890,7 +599,7 @@ export type Duel = {
         {
           "name": "quoteMint",
           "docs": [
-            "Quote token mint (WSOL, USDC, etc.)"
+            "Quote token mint (WSOL)"
           ]
         },
         {
@@ -914,10 +623,7 @@ export type Duel = {
           "writable": true
         },
         {
-          "name": "protocolFeeAccount",
-          "docs": [
-            "Protocol fee recipient — must match config"
-          ]
+          "name": "protocolFeeAccount"
         },
         {
           "name": "config",
@@ -1153,7 +859,7 @@ export type Duel = {
         {
           "name": "creatorFeeAccount",
           "docs": [
-            "Creator fee recipient — must be a valid account"
+            "Creator fee recipient -- must be a valid account"
           ]
         },
         {
@@ -1186,34 +892,6 @@ export type Duel = {
           "type": "u64"
         },
         {
-          "name": "battleTaxBps",
-          "type": "u16"
-        },
-        {
-          "name": "protocolFeeBps",
-          "type": "u16"
-        },
-        {
-          "name": "sellPenaltyMaxBps",
-          "type": "u16"
-        },
-        {
-          "name": "protectionActivationOffset",
-          "type": "u64"
-        },
-        {
-          "name": "curveParams",
-          "type": {
-            "defined": {
-              "name": "curveParams"
-            }
-          }
-        },
-        {
-          "name": "totalSupplyPerSide",
-          "type": "u64"
-        },
-        {
           "name": "nameA",
           "type": "string"
         },
@@ -1236,110 +914,6 @@ export type Duel = {
         {
           "name": "uriB",
           "type": "string"
-        },
-        {
-          "name": "lpLockMode",
-          "type": {
-            "defined": {
-              "name": "lpLockMode"
-            }
-          }
-        },
-        {
-          "name": "maxObservationChangePerUpdate",
-          "type": "u64"
-        },
-        {
-          "name": "minTwapSpreadBps",
-          "type": "u16"
-        },
-        {
-          "name": "creatorFeeBps",
-          "type": "u16"
-        },
-        {
-          "name": "resolutionMode",
-          "type": {
-            "defined": {
-              "name": "resolutionMode"
-            }
-          }
-        },
-        {
-          "name": "oracleAuthority",
-          "type": "pubkey"
-        },
-        {
-          "name": "oracleDisputeWindow",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "lockPosition",
-      "discriminator": [
-        227,
-        62,
-        2,
-        252,
-        247,
-        10,
-        171,
-        185
-      ],
-      "accounts": [
-        {
-          "name": "authority",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "market"
-        },
-        {
-          "name": "sideAccount"
-        },
-        {
-          "name": "pool",
-          "docs": [
-            "Pool (mut)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "position",
-          "docs": [
-            "Position (mut)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "positionNftAccount",
-          "docs": [
-            "Position NFT token account"
-          ]
-        },
-        {
-          "name": "eventAuthority",
-          "docs": [
-            "Event authority PDA"
-          ]
-        },
-        {
-          "name": "meteoraProgram",
-          "docs": [
-            "Meteora DAMM v2 program"
-          ]
-        }
-      ],
-      "args": [
-        {
-          "name": "side",
-          "type": "u8"
-        },
-        {
-          "name": "lockLiquidity",
-          "type": "u128"
         }
       ]
     },
@@ -1379,33 +953,31 @@ export type Duel = {
       "args": []
     },
     {
-      "name": "removeLiquidity",
+      "name": "resolveAndGraduate",
       "discriminator": [
-        80,
-        85,
-        209,
-        72,
-        24,
-        206,
-        177,
-        108
+        134,
+        101,
+        115,
+        132,
+        222,
+        205,
+        69,
+        106
       ],
       "accounts": [
         {
-          "name": "authority",
-          "docs": [
-            "Market creator or protocol admin"
-          ],
+          "name": "resolver",
           "writable": true,
           "signer": true
         },
         {
-          "name": "market"
+          "name": "market",
+          "writable": true
         },
         {
           "name": "config",
           "docs": [
-            "Protocol config (for admin check)"
+            "Protocol config"
           ],
           "pda": {
             "seeds": [
@@ -1424,25 +996,65 @@ export type Duel = {
           }
         },
         {
-          "name": "sideAccount"
+          "name": "sideA",
+          "writable": true
         },
         {
-          "name": "tokenMint",
+          "name": "sideB",
+          "writable": true
+        },
+        {
+          "name": "quoteVaultA",
+          "writable": true
+        },
+        {
+          "name": "quoteVaultB",
+          "writable": true
+        },
+        {
+          "name": "tokenVaultA",
+          "writable": true
+        },
+        {
+          "name": "tokenVaultB",
+          "writable": true
+        },
+        {
+          "name": "tokenMintA",
+          "writable": true
+        },
+        {
+          "name": "tokenMintB",
+          "writable": true
+        },
+        {
+          "name": "quoteMint"
+        },
+        {
+          "name": "marketTokenAta",
           "docs": [
-            "Token mint for this side"
-          ]
+            "Resolver's ATA for winning side tokens (pre-created by caller)"
+          ],
+          "writable": true
         },
         {
-          "name": "wsolMint",
+          "name": "marketWsolAta",
           "docs": [
-            "WSOL mint"
-          ]
-        },
-        {
-          "name": "poolAuthority"
+            "Resolver's WSOL ATA (pre-created by caller)"
+          ],
+          "writable": true
         },
         {
           "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "positionNftMint",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "positionNftAccount",
           "writable": true
         },
         {
@@ -1450,225 +1062,50 @@ export type Duel = {
           "writable": true
         },
         {
-          "name": "tokenAAccount",
-          "docs": [
-            "Token A account to receive withdrawn tokens"
-          ],
+          "name": "poolTokenVaultA",
           "writable": true
         },
         {
-          "name": "tokenBAccount",
-          "docs": [
-            "Token B account to receive withdrawn WSOL"
-          ],
+          "name": "poolTokenVaultB",
           "writable": true
         },
         {
-          "name": "tokenAVault",
-          "writable": true
+          "name": "poolAuthority"
         },
         {
-          "name": "tokenBVault",
-          "writable": true
-        },
-        {
-          "name": "positionNftAccount",
-          "docs": [
-            "Position NFT token account"
-          ]
-        },
-        {
-          "name": "tokenAProgram",
-          "docs": [
-            "Token A program"
-          ]
-        },
-        {
-          "name": "tokenBProgram",
-          "docs": [
-            "Token B program"
-          ]
-        },
-        {
-          "name": "eventAuthority",
-          "docs": [
-            "Event authority PDA"
-          ]
+          "name": "eventAuthority"
         },
         {
           "name": "meteoraProgram"
+        },
+        {
+          "name": "losingTokenMetadata",
+          "writable": true
+        },
+        {
+          "name": "tokenMetadataProgram"
+        },
+        {
+          "name": "tokenProgram"
+        },
+        {
+          "name": "quoteTokenProgram"
+        },
+        {
+          "name": "token2022Program"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "side",
-          "type": "u8"
-        },
-        {
-          "name": "liquidityDelta",
-          "type": "u128"
-        },
-        {
-          "name": "minTokenA",
-          "type": "u64"
-        },
-        {
-          "name": "minTokenB",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "resolveMarket",
-      "discriminator": [
-        155,
-        23,
-        80,
-        173,
-        46,
-        74,
-        23,
-        239
-      ],
-      "accounts": [
-        {
-          "name": "resolver",
-          "docs": [
-            "Anyone can resolve (permissionless)"
-          ],
-          "signer": true
-        },
-        {
-          "name": "market",
-          "writable": true
-        },
-        {
-          "name": "sideA",
-          "writable": true
-        },
-        {
-          "name": "sideB",
-          "writable": true
-        },
-        {
-          "name": "quoteMint",
-          "docs": [
-            "Quote token mint"
-          ]
-        },
-        {
-          "name": "quoteVaultA",
-          "docs": [
-            "Quote vault for Side A"
-          ],
-          "writable": true
-        },
-        {
-          "name": "quoteVaultB",
-          "docs": [
-            "Quote vault for Side B"
-          ],
-          "writable": true
-        },
-        {
-          "name": "protocolFeeAccount",
-          "docs": [
-            "Protocol fee recipient (quote token account)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "creatorFeeAccount",
-          "docs": [
-            "Creator fee recipient (quote token account)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "quoteTokenProgram",
-          "docs": [
-            "Quote token program"
-          ]
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "resolveWithOracle",
-      "discriminator": [
-        241,
-        145,
-        153,
-        184,
-        228,
-        144,
-        92,
-        224
-      ],
-      "accounts": [
-        {
-          "name": "oracle",
-          "docs": [
-            "Oracle authority — must match market.oracle_authority"
-          ],
-          "signer": true
-        },
-        {
-          "name": "market",
-          "writable": true
-        },
-        {
-          "name": "sideA",
-          "writable": true
-        },
-        {
-          "name": "sideB",
-          "writable": true
-        },
-        {
-          "name": "quoteMint",
-          "docs": [
-            "Quote token mint"
-          ]
-        },
-        {
-          "name": "quoteVaultA",
-          "docs": [
-            "Quote vault for Side A"
-          ],
-          "writable": true
-        },
-        {
-          "name": "quoteVaultB",
-          "docs": [
-            "Quote vault for Side B"
-          ],
-          "writable": true
-        },
-        {
-          "name": "protocolFeeAccount",
-          "docs": [
-            "Protocol fee recipient (quote token account)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "creatorFeeAccount",
-          "docs": [
-            "Creator fee recipient (quote token account)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "quoteTokenProgram",
-          "docs": [
-            "Quote token program"
-          ]
-        }
-      ],
-      "args": [
-        {
-          "name": "winningSide",
+          "name": "expectedWinner",
           "type": "u8"
         }
       ]
@@ -1780,7 +1217,7 @@ export type Duel = {
           "type": "u64"
         },
         {
-          "name": "minSolOut",
+          "name": "minQuoteOut",
           "type": "u64"
         }
       ]
@@ -1852,9 +1289,23 @@ export type Duel = {
           "writable": true
         },
         {
+          "name": "protocolFeeAccount",
+          "docs": [
+            "Protocol fee recipient (WSOL token account)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "creatorFeeAccount",
+          "docs": [
+            "Creator fee recipient (WSOL token account)"
+          ],
+          "writable": true
+        },
+        {
           "name": "config",
           "docs": [
-            "Protocol config (pause check)"
+            "Protocol config (pause check + fee rates)"
           ],
           "pda": {
             "seeds": [
@@ -1892,7 +1343,7 @@ export type Duel = {
           "type": "u64"
         },
         {
-          "name": "minSolOut",
+          "name": "minQuoteOut",
           "type": "u64"
         }
       ]
@@ -1950,7 +1401,13 @@ export type Duel = {
           }
         },
         {
-          "name": "defaultProtocolFeeBps",
+          "name": "tradeFeeBps",
+          "type": {
+            "option": "u16"
+          }
+        },
+        {
+          "name": "creatorFeeSplitBps",
           "type": {
             "option": "u16"
           }
@@ -2091,19 +1548,6 @@ export type Duel = {
       ]
     },
     {
-      "name": "tokensGraduated",
-      "discriminator": [
-        5,
-        121,
-        149,
-        210,
-        62,
-        223,
-        221,
-        24
-      ]
-    },
-    {
       "name": "tokensSold",
       "discriminator": [
         217,
@@ -2193,88 +1637,48 @@ export type Duel = {
     },
     {
       "code": 6012,
-      "name": "invalidCurveParams",
-      "msg": "Invalid curve parameters"
-    },
-    {
-      "code": 6013,
       "name": "invalidMarketConfig",
       "msg": "Invalid market configuration"
     },
     {
-      "code": 6014,
+      "code": 6013,
       "name": "mathOverflow",
       "msg": "Math overflow"
     },
     {
-      "code": 6015,
-      "name": "alreadyGraduated",
-      "msg": "Side already graduated to DEX"
-    },
-    {
-      "code": 6016,
-      "name": "insufficientReserveForGraduation",
-      "msg": "Insufficient reserve for DEX graduation"
-    },
-    {
-      "code": 6017,
-      "name": "notGraduated",
-      "msg": "Side must be graduated before vault closure"
-    },
-    {
-      "code": 6018,
-      "name": "lpLocked",
-      "msg": "LP is permanently locked, cannot remove liquidity or close position"
-    },
-    {
-      "code": 6019,
+      "code": 6014,
       "name": "protocolPaused",
       "msg": "Protocol is paused"
     },
     {
-      "code": 6020,
-      "name": "drawResult",
-      "msg": "TWAP spread below minimum threshold, resolved as draw"
-    },
-    {
-      "code": 6021,
+      "code": 6015,
       "name": "invalidFeeConfig",
       "msg": "Invalid fee configuration"
     },
     {
-      "code": 6022,
-      "name": "oracleNotAllowed",
-      "msg": "Oracle resolution not allowed for this market"
-    },
-    {
-      "code": 6023,
-      "name": "twapNotAllowed",
-      "msg": "TWAP resolution not allowed for this market (oracle-only mode)"
-    },
-    {
-      "code": 6024,
-      "name": "oracleDisputeWindowActive",
-      "msg": "Oracle dispute window has not expired yet"
-    },
-    {
-      "code": 6025,
-      "name": "unauthorizedOracle",
-      "msg": "Unauthorized oracle authority"
-    },
-    {
-      "code": 6026,
-      "name": "invalidWinningSide",
-      "msg": "Invalid winning side (must be 0 or 1)"
-    },
-    {
-      "code": 6027,
+      "code": 6016,
       "name": "reentrancyLocked",
       "msg": "Market is currently locked (re-entrancy protection)"
     },
     {
-      "code": 6028,
+      "code": 6017,
       "name": "emergencyResolveTooEarly",
       "msg": "Emergency resolution window has not passed yet"
+    },
+    {
+      "code": 6018,
+      "name": "winnerMismatch",
+      "msg": "Expected winner does not match TWAP result"
+    },
+    {
+      "code": 6019,
+      "name": "emergencyOnlyOperation",
+      "msg": "This operation is only available for emergency-resolved (draw) markets"
+    },
+    {
+      "code": 6020,
+      "name": "insufficientReserveForGraduation",
+      "msg": "Insufficient reserve for DEX graduation (minimum 0.1 SOL)"
     }
   ],
   "types": [
@@ -2292,40 +1696,15 @@ export type Duel = {
             "type": "bool"
           },
           {
-            "name": "defaultProtocolFeeBps",
+            "name": "tradeFeeBps",
+            "type": "u16"
+          },
+          {
+            "name": "creatorFeeSplitBps",
             "type": "u16"
           },
           {
             "name": "marketCreationFee",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "curveParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "a",
-            "docs": [
-              "Steepness coefficient (scaled by 10^9)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "n",
-            "docs": [
-              "Exponent (1 = linear, 2 = quadratic, 3 = cubic)"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "b",
-            "docs": [
-              "Base price in quote token smallest units"
-            ],
             "type": "u64"
           }
         ]
@@ -2352,28 +1731,24 @@ export type Duel = {
       }
     },
     {
-      "name": "lpLockMode",
-      "docs": [
-        "LP lock mode — configurable at market creation.",
-        "Determines whether LP liquidity can be withdrawn after graduation."
-      ],
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "unlocked"
-          },
-          {
-            "name": "permanentLock"
-          }
-        ]
-      }
-    },
-    {
       "name": "market",
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Account version for future upgrades"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          },
           {
             "name": "authority",
             "docs": [
@@ -2405,7 +1780,7 @@ export type Duel = {
           {
             "name": "quoteMint",
             "docs": [
-              "Quote token mint (WSOL, USDC, etc.)"
+              "Quote token mint (WSOL)"
             ],
             "type": "pubkey"
           },
@@ -2431,69 +1806,16 @@ export type Duel = {
             "type": "u64"
           },
           {
-            "name": "battleTaxBps",
-            "docs": [
-              "Battle tax in basis points (0-10000)"
-            ],
-            "type": "u16"
-          },
-          {
-            "name": "protocolFeeBps",
-            "docs": [
-              "Protocol fee in basis points (0-500)"
-            ],
-            "type": "u16"
-          },
-          {
-            "name": "sellPenaltyMaxBps",
-            "docs": [
-              "Max sell penalty in basis points (0-3000)"
-            ],
-            "type": "u16"
-          },
-          {
-            "name": "protectionActivationOffset",
-            "docs": [
-              "Seconds before deadline when sell penalty activates"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "curveParams",
-            "docs": [
-              "Bonding curve parameters"
-            ],
-            "type": {
-              "defined": {
-                "name": "curveParams"
-              }
-            }
-          },
-          {
-            "name": "maxObservationChangePerUpdate",
-            "docs": [
-              "Max observation change per TWAP update (0 = raw price, >0 = lagging filter)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "minTwapSpreadBps",
-            "docs": [
-              "Min TWAP spread in bps to determine winner (0 = any difference, >0 = draw if below)"
-            ],
-            "type": "u16"
-          },
-          {
-            "name": "creatorFeeBps",
-            "docs": [
-              "Creator fee in basis points (deducted from transfer before protocol fee)"
-            ],
-            "type": "u16"
-          },
-          {
             "name": "creatorFeeAccount",
             "docs": [
               "Creator fee recipient"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "protocolFeeAccount",
+            "docs": [
+              "Protocol fee recipient"
             ],
             "type": "pubkey"
           },
@@ -2525,7 +1847,7 @@ export type Duel = {
           {
             "name": "winner",
             "docs": [
-              "Winner side index (0 = A, 1 = B), None if not resolved or draw"
+              "Winner side index (0 = A, 1 = B), None if not resolved or emergency draw"
             ],
             "type": {
               "option": "u8"
@@ -2534,7 +1856,7 @@ export type Duel = {
           {
             "name": "finalTwapA",
             "docs": [
-              "Final TWAP for side A (quote token units, price * 10^9 for precision)"
+              "Final TWAP for side A"
             ],
             "type": "u64"
           },
@@ -2546,82 +1868,30 @@ export type Duel = {
             "type": "u64"
           },
           {
-            "name": "protocolFeeAccount",
-            "docs": [
-              "Protocol fee recipient"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "graduatedA",
-            "docs": [
-              "Whether Side A has graduated to DEX"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "graduatedB",
-            "docs": [
-              "Whether Side B has graduated to DEX"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "lpLockMode",
-            "docs": [
-              "LP lock mode (set at creation, governs post-graduation LP behavior)"
-            ],
-            "type": {
-              "defined": {
-                "name": "lpLockMode"
-              }
-            }
-          },
-          {
-            "name": "resolutionMode",
-            "docs": [
-              "Resolution mode (Twap, Oracle, or OracleWithTwapFallback)"
-            ],
-            "type": {
-              "defined": {
-                "name": "resolutionMode"
-              }
-            }
-          },
-          {
-            "name": "oracleAuthority",
-            "docs": [
-              "Oracle authority (required if resolution_mode != Twap)"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "oracleDisputeWindow",
-            "docs": [
-              "Dispute window in seconds after deadline (for OracleWithTwapFallback)"
-            ],
-            "type": "u64"
-          },
-          {
             "name": "emergencyWindow",
             "docs": [
-              "Emergency resolution window in seconds after deadline (draw fallback)"
+              "Emergency resolution window in seconds after deadline"
             ],
             "type": "u64"
           },
           {
             "name": "locked",
             "docs": [
-              "Re-entrancy lock (prevents concurrent buy/sell during CPI)"
+              "Re-entrancy lock"
             ],
             "type": "bool"
           },
           {
-            "name": "bump",
+            "name": "reserved",
             "docs": [
-              "PDA bump"
+              "Reserved for future fields"
             ],
-            "type": "u8"
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
           }
         ]
       }
@@ -2660,10 +1930,6 @@ export type Duel = {
             "type": "i64"
           },
           {
-            "name": "battleTaxBps",
-            "type": "u16"
-          },
-          {
             "name": "marketId",
             "type": "u64"
           },
@@ -2676,6 +1942,9 @@ export type Duel = {
     },
     {
       "name": "marketResolved",
+      "docs": [
+        "Emitted when market resolves and graduates to DEX atomically"
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -2688,10 +1957,6 @@ export type Duel = {
             "type": "u8"
           },
           {
-            "name": "isDraw",
-            "type": "bool"
-          },
-          {
             "name": "finalTwapA",
             "type": "u64"
           },
@@ -2700,20 +1965,20 @@ export type Duel = {
             "type": "u64"
           },
           {
-            "name": "transferAmount",
+            "name": "loserReserveTransferred",
             "type": "u64"
           },
           {
-            "name": "protocolFee",
+            "name": "dexPool",
+            "type": "pubkey"
+          },
+          {
+            "name": "solSeeded",
             "type": "u64"
           },
           {
-            "name": "creatorFee",
+            "name": "tokensSeeded",
             "type": "u64"
-          },
-          {
-            "name": "resolutionMode",
-            "type": "u8"
           }
         ]
       }
@@ -2759,16 +2024,9 @@ export type Duel = {
             "type": "bool"
           },
           {
-            "name": "defaultProtocolFeeBps",
-            "docs": [
-              "Default protocol fee in basis points"
-            ],
-            "type": "u16"
-          },
-          {
             "name": "protocolFeeAccount",
             "docs": [
-              "Protocol fee recipient"
+              "Protocol fee recipient (WSOL token account)"
             ],
             "type": "pubkey"
           },
@@ -2782,9 +2040,23 @@ export type Duel = {
           {
             "name": "minMarketDuration",
             "docs": [
-              "Minimum market duration in seconds (admin-configurable)"
+              "Minimum market duration in seconds"
             ],
             "type": "u64"
+          },
+          {
+            "name": "tradeFeeBps",
+            "docs": [
+              "Trade fee in basis points (applied to every buy/sell)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "creatorFeeSplitBps",
+            "docs": [
+              "Creator's share of trade fee in basis points (e.g., 5000 = 50%)"
+            ],
+            "type": "u16"
           },
           {
             "name": "bump",
@@ -2792,26 +2064,18 @@ export type Duel = {
               "PDA bump"
             ],
             "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "resolutionMode",
-      "docs": [
-        "Resolution mode — determines how a market outcome is decided."
-      ],
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "twap"
           },
           {
-            "name": "oracle"
-          },
-          {
-            "name": "oracleWithTwapFallback"
+            "name": "reserved",
+            "docs": [
+              "Reserved for future fields"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
           }
         ]
       }
@@ -2852,7 +2116,7 @@ export type Duel = {
           {
             "name": "quoteReserveVault",
             "docs": [
-              "Vault holding quote tokens (WSOL, USDC, etc.) from buys"
+              "Vault holding quote tokens (WSOL) from buys"
             ],
             "type": "pubkey"
           },
@@ -2871,13 +2135,6 @@ export type Duel = {
             "type": "u64"
           },
           {
-            "name": "peakReserve",
-            "docs": [
-              "Historical max quote reserve (for sell penalty calc)"
-            ],
-            "type": "u64"
-          },
-          {
             "name": "twapAccumulator",
             "docs": [
               "Sum of price samples for TWAP (u128 to prevent overflow)"
@@ -2885,25 +2142,23 @@ export type Duel = {
             "type": "u128"
           },
           {
-            "name": "lastObservation",
-            "docs": [
-              "Last observation value for lagging TWAP (0 if disabled or first sample)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "penaltyAccumulated",
-            "docs": [
-              "Accumulated sell penalty (quote tokens retained in vault beyond curve math)"
-            ],
-            "type": "u64"
-          },
-          {
             "name": "bump",
             "docs": [
               "PDA bump"
             ],
             "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved for future fields"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
       }
@@ -2934,35 +2189,11 @@ export type Duel = {
             "type": "u64"
           },
           {
+            "name": "feeAmount",
+            "type": "u64"
+          },
+          {
             "name": "newPrice",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "tokensGraduated",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "side",
-            "type": "u8"
-          },
-          {
-            "name": "dexPool",
-            "type": "pubkey"
-          },
-          {
-            "name": "solSeeded",
-            "type": "u64"
-          },
-          {
-            "name": "tokensSeeded",
             "type": "u64"
           }
         ]
@@ -2994,7 +2225,7 @@ export type Duel = {
             "type": "u64"
           },
           {
-            "name": "penaltyApplied",
+            "name": "feeAmount",
             "type": "u64"
           },
           {
@@ -3019,14 +2250,6 @@ export type Duel = {
           },
           {
             "name": "priceB",
-            "type": "u64"
-          },
-          {
-            "name": "observationA",
-            "type": "u64"
-          },
-          {
-            "name": "observationB",
             "type": "u64"
           },
           {

@@ -95,9 +95,6 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Copy generated types
-        run: cp target/types/duel.ts sdk/src/types.ts
-
       - name: Build SDK
         run: cd sdk && bun run build
 
