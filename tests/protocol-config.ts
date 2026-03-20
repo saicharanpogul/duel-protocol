@@ -6,7 +6,6 @@ import {
   PublicKey,
   SystemProgram,
   LAMPORTS_PER_SOL,
-  ComputeBudgetProgram,
   Transaction,
 } from "@solana/web3.js";
 import {
@@ -14,17 +13,20 @@ import {
   NATIVE_MINT,
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
-  createSyncNativeInstruction,
   getAccount,
 } from "@solana/spl-token";
 import { expect } from "chai";
 import BN from "bn.js";
 import {
-  TOKEN_METADATA_PROGRAM_ID,
   findMetadataPda,
   derivePdas,
   wrapSol,
+  setupTestContext,
+  createTestMarket,
+  buyTestTokens,
+  TOKEN_METADATA_PROGRAM_ID,
   Pdas,
+  TestContext,
 } from "./helpers";
 
 describe("protocol-config", () => {
@@ -40,100 +42,28 @@ describe("protocol-config", () => {
     program.programId
   );
 
-  // Protocol fee = WSOL token account
-  let protocolFeeOwner: Keypair;
-  let protocolFeeAccount: PublicKey;
-  let creatorFeeAccount: PublicKey;
-  let creatorWsolAta: PublicKey;
+  let ctx: TestContext;
 
   before(async () => {
-    creatorFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, creator.publicKey);
-    try {
-      await getAccount(provider.connection, creatorFeeAccount);
-    } catch {
-      const tx = new Transaction().add(
-        createAssociatedTokenAccountInstruction(creator.publicKey, creatorFeeAccount, creator.publicKey, NATIVE_MINT)
-      );
-      await provider.sendAndConfirm(tx);
-    }
-    creatorWsolAta = creatorFeeAccount;
-
-    try {
-      const existingConfig = await program.account.programConfig.fetch(configPda);
-      protocolFeeAccount = existingConfig.protocolFeeAccount;
-    } catch {
-      protocolFeeOwner = Keypair.generate();
-      const fundTx = new Transaction().add(
-        SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: protocolFeeOwner.publicKey, lamports: LAMPORTS_PER_SOL / 10 })
-      );
-      await provider.sendAndConfirm(fundTx);
-      protocolFeeAccount = await getAssociatedTokenAddress(NATIVE_MINT, protocolFeeOwner.publicKey);
-      await provider.sendAndConfirm(
-        new Transaction().add(createAssociatedTokenAccountInstruction(protocolFeeOwner.publicKey, protocolFeeAccount, protocolFeeOwner.publicKey, NATIVE_MINT)),
-        [protocolFeeOwner]
-      );
-      await program.methods
-        .initializeConfig(125, new BN(0))
-        .accounts({ admin: creator.publicKey, protocolFeeAccount, systemProgram: SystemProgram.programId } as any)
-        .rpc();
-    }
+    ctx = await setupTestContext(provider, program, creator);
   });
-
-  function deriveMarketPdas(marketId: BN) {
-    return derivePdas(program.programId, creator.publicKey, marketId);
-  }
-
-  async function createMarket(marketId: BN) {
-    const pdas = deriveMarketPdas(marketId);
-    const now = Math.floor(Date.now() / 1000);
-    await program.methods
-      .initializeMarket(
-        marketId, new BN(now + 3600), new BN(600), new BN(10),
-        5000, 100, 1500, new BN(300),
-        { a: new BN(1_000_000), n: 1, b: new BN(1_000) },
-        new BN(1_000_000_000),
-        "Config Test A", "CTA", "", "Config Test B", "CTB", "",
-        { unlocked: {} },
-        new BN(0), 0, 0,
-        { twap: {} }, PublicKey.default, new BN(0),
-      )
-      .accounts({
-        creator: creator.publicKey,
-        market: pdas.market, sideA: pdas.sideA, sideB: pdas.sideB,
-        tokenMintA: pdas.mintA, tokenMintB: pdas.mintB,
-        tokenVaultA: pdas.tvA, tokenVaultB: pdas.tvB,
-        quoteMint: NATIVE_MINT,
-        quoteTokenProgram: TOKEN_PROGRAM_ID,
-        quoteVaultA: pdas.qvA, quoteVaultB: pdas.qvB,
-        protocolFeeAccount: protocolFeeAccount,
-        creatorFeeAccount: creatorFeeAccount,
-        config: configPda,
-        metadataA: findMetadataPda(pdas.mintA),
-        metadataB: findMetadataPda(pdas.mintB),
-        tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-      })
-      .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
-      .rpc();
-    return pdas;
-  }
 
   describe("Config State", () => {
     it("reads config state correctly", async () => {
       const config = await program.account.programConfig.fetch(configPda);
       expect(config.admin.toString()).to.equal(creator.publicKey.toString());
       expect(config.paused).to.be.false;
-      expect(config.defaultProtocolFeeBps).to.be.a("number");
-      console.log(`    Config: admin=${config.admin.toString().slice(0, 8)}..., paused=${config.paused}, fee=${config.defaultProtocolFeeBps}bps`);
+      // Config may have been initialized by another test suite; just verify fields exist
+      expect(config.tradeFeeBps).to.be.a("number");
+      expect(config.creatorFeeSplitBps).to.be.a("number");
+      console.log(`    Config: admin=${config.admin.toString().slice(0, 8)}..., paused=${config.paused}, trade_fee=${config.tradeFeeBps}bps, creator_split=${config.creatorFeeSplitBps}bps`);
     });
   });
 
   describe("Pause / Unpause", () => {
     it("should pause protocol via update_config", async () => {
-      await program.methods
-        .updateConfig(true, null, null, null)
+      await (program.methods as any)
+        .updateConfig(true, null, null, null, null)
         .accounts({
           admin: creator.publicKey,
           config: configPda,
@@ -149,7 +79,7 @@ describe("protocol-config", () => {
 
     it("should reject market creation when paused", async () => {
       try {
-        await createMarket(new BN(configBase + 10));
+        await createTestMarket(provider, program, creator, ctx, new BN(configBase + 10));
         expect.fail("should have rejected");
       } catch (e: any) {
         expect(e.message).to.include("ProtocolPaused");
@@ -159,16 +89,16 @@ describe("protocol-config", () => {
 
     it("should reject buy when paused", async () => {
       // Unpause temporarily to create market, then re-pause to test buy rejection
-      await program.methods
-        .updateConfig(false, null, null, null)
+      await (program.methods as any)
+        .updateConfig(false, null, null, null, null)
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
 
-      const pdas = await createMarket(new BN(configBase + 11));
+      const pdas = await createTestMarket(provider, program, creator, ctx, new BN(configBase + 11));
 
       // Re-pause
-      await program.methods
-        .updateConfig(true, null, null, null)
+      await (program.methods as any)
+        .updateConfig(true, null, null, null, null)
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
 
@@ -179,12 +109,12 @@ describe("protocol-config", () => {
           creator.publicKey, ata, creator.publicKey, pdas.mintA
         );
         await provider.sendAndConfirm(new Transaction().add(createAtaIx));
-      } catch { }
+      } catch { /* ATA may already exist */ }
 
       await wrapSol(provider, creator.publicKey, LAMPORTS_PER_SOL);
 
       try {
-        await program.methods
+        await (program.methods as any)
           .buyTokens(0, new BN(LAMPORTS_PER_SOL), new BN(1))
           .accounts({
             buyer: creator.publicKey,
@@ -195,7 +125,9 @@ describe("protocol-config", () => {
             buyerTokenAccount: ata,
             quoteMint: NATIVE_MINT,
             quoteVault: pdas.qvA,
-            buyerQuoteAccount: creatorWsolAta,
+            buyerQuoteAccount: ctx.creatorWsolAta,
+            protocolFeeAccount: ctx.protocolFeeAccount,
+            creatorFeeAccount: ctx.creatorFeeAccount,
             config: configPda,
             tokenProgram: TOKEN_PROGRAM_ID,
             quoteTokenProgram: TOKEN_PROGRAM_ID,
@@ -209,8 +141,8 @@ describe("protocol-config", () => {
     });
 
     it("should unpause and resume trading", async () => {
-      await program.methods
-        .updateConfig(false, null, null, null)
+      await (program.methods as any)
+        .updateConfig(false, null, null, null, null)
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
 
@@ -221,39 +153,56 @@ describe("protocol-config", () => {
   });
 
   describe("Fee Updates", () => {
-    it("should update default_protocol_fee_bps", async () => {
-      await program.methods
-        .updateConfig(null, 200, null, null)
+    it("should update trade_fee_bps", async () => {
+      await (program.methods as any)
+        .updateConfig(null, 200, null, null, null)
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
 
       const config = await program.account.programConfig.fetch(configPda);
-      expect(config.defaultProtocolFeeBps).to.equal(200);
-      console.log(`    Updated default_protocol_fee_bps to 200`);
+      expect(config.tradeFeeBps).to.equal(200);
+      console.log(`    Updated trade_fee_bps to 200`);
 
-      // Restore
-      await program.methods
-        .updateConfig(null, 125, null, null)
+      // Restore to 100
+      await (program.methods as any)
+        .updateConfig(null, 100, null, null, null)
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
     });
 
-    it("should reject fee_bps > 500", async () => {
+    it("should reject trade_fee_bps > 500", async () => {
       try {
-        await program.methods
-          .updateConfig(null, 600, null, null)
+        await (program.methods as any)
+          .updateConfig(null, 600, null, null, null)
           .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
           .rpc();
         expect.fail("should have rejected");
       } catch (e: any) {
         expect(e.message).to.include("InvalidFeeConfig");
-        console.log(`    Rejected fee_bps=600 (max 500)`);
+        console.log(`    Rejected trade_fee_bps=600 (max 500)`);
       }
     });
 
+    it("should update creator_fee_split_bps", async () => {
+      await (program.methods as any)
+        .updateConfig(null, null, 7000, null, null)
+        .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
+        .rpc();
+
+      const config = await program.account.programConfig.fetch(configPda);
+      expect(config.creatorFeeSplitBps).to.equal(7000);
+      console.log(`    Updated creator_fee_split_bps to 7000`);
+
+      // Restore to 5000
+      await (program.methods as any)
+        .updateConfig(null, null, 5000, null, null)
+        .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
+        .rpc();
+    });
+
     it("should update market_creation_fee", async () => {
-      await program.methods
-        .updateConfig(null, null, new BN(10_000), null)
+      await (program.methods as any)
+        .updateConfig(null, null, null, new BN(10_000), null)
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
 
@@ -262,8 +211,25 @@ describe("protocol-config", () => {
       console.log(`    Updated market_creation_fee to 10000 lamports`);
 
       // Restore to 0
-      await program.methods
-        .updateConfig(null, null, new BN(0), null)
+      await (program.methods as any)
+        .updateConfig(null, null, null, new BN(0), null)
+        .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
+        .rpc();
+    });
+
+    it("should update min_market_duration", async () => {
+      await (program.methods as any)
+        .updateConfig(null, null, null, null, new BN(30))
+        .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
+        .rpc();
+
+      const config = await program.account.programConfig.fetch(configPda);
+      expect(config.minMarketDuration.toNumber()).to.equal(30);
+      console.log(`    Updated min_market_duration to 30`);
+
+      // Restore to 10
+      await (program.methods as any)
+        .updateConfig(null, null, null, null, new BN(10))
         .accounts({ admin: creator.publicKey, config: configPda, newProtocolFeeAccount: null, newAdmin: null })
         .rpc();
     });
@@ -281,8 +247,8 @@ describe("protocol-config", () => {
       );
       await provider.sendAndConfirm(tx);
 
-      await program.methods
-        .updateConfig(null, null, null, null)
+      await (program.methods as any)
+        .updateConfig(null, null, null, null, null)
         .accounts({
           admin: creator.publicKey,
           config: configPda,
@@ -296,8 +262,8 @@ describe("protocol-config", () => {
       console.log(`    Admin transferred to ${newAdmin.publicKey.toString().slice(0, 8)}...`);
 
       // Transfer back
-      await program.methods
-        .updateConfig(null, null, null, null)
+      await (program.methods as any)
+        .updateConfig(null, null, null, null, null)
         .accounts({
           admin: newAdmin.publicKey,
           config: configPda,
@@ -324,8 +290,8 @@ describe("protocol-config", () => {
       await provider.sendAndConfirm(tx);
 
       try {
-        await program.methods
-          .updateConfig(true, null, null, null)
+        await (program.methods as any)
+          .updateConfig(true, null, null, null, null)
           .accounts({
             admin: nonAdmin.publicKey,
             config: configPda,

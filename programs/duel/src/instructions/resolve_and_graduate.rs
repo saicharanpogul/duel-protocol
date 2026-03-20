@@ -86,12 +86,12 @@ pub struct ResolveAndGraduate<'info> {
     )]
     pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    /// Market PDA's ATA for winning side tokens (pre-created by caller)
+    /// Resolver's ATA for winning side tokens (pre-created by caller)
     /// CHECK: Validated as token account during transfer CPI
     #[account(mut)]
     pub market_token_ata: UncheckedAccount<'info>,
 
-    /// Market PDA's WSOL ATA (pre-created by caller)
+    /// Resolver's WSOL ATA (pre-created by caller)
     /// CHECK: Validated as token account during transfer CPI
     #[account(mut)]
     pub market_wsol_ata: UncheckedAccount<'info>,
