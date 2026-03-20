@@ -8,7 +8,7 @@ on:
 
 env:
   SOLANA_VERSION: "2.1.7"
-  ANCHOR_VERSION: "0.32.1"
+  ANCHOR_VERSION: "0.31.1"
   NODE_VERSION: "20"
   RUST_TOOLCHAIN: "1.83.0"
 
@@ -66,6 +66,11 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      - name: Pin deps for BPF toolchain (rustc 1.79)
+        run: |
+          cargo update indexmap@2.13.0 --precise 2.7.1 2>/dev/null || true
+          cargo update proc-macro-crate@3.5.0 --precise 3.2.0 2>/dev/null || true
 
       - name: Build program
         run: anchor build
