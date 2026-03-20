@@ -67,11 +67,6 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Pin deps for BPF toolchain (rustc 1.79)
-        run: |
-          cargo update indexmap@2.13.0 --precise 2.7.1 2>/dev/null || true
-          cargo update proc-macro-crate@3.5.0 --precise 3.2.0 2>/dev/null || true
-
       - name: Build program
         run: anchor build
 
