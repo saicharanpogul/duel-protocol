@@ -2,8 +2,8 @@ import { Program, AnchorProvider, Idl, type Wallet } from "@coral-xyz/anchor";
 import { Connection, PublicKey, Keypair, Transaction, VersionedTransaction } from "@solana/web3.js";
 import IDL from "./idl.json";
 
-export const PROGRAM_ID = new PublicKey("CgR6V1AxC7exDFNoh3Q5JP9aea9YuPqq283EwACUGpZE");
-export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "http://localhost:8999";
+export const PROGRAM_ID = new PublicKey("3kzt4Q7xN2RLzYYx2HfnqZVoAHFAKKa17hTDvXsy1PQ9");
+export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "http://localhost:8899";
 
 // Hardcoded curve constants (match program)
 export const CURVE_A = 1;
@@ -102,9 +102,9 @@ export interface ProgramConfigAccount {
 
 /* PDA derivations */
 
-export function findMarketPda(creator: PublicKey, marketId: bigint): PublicKey {
-  const buf = Buffer.alloc(8);
-  buf.writeBigUInt64LE(BigInt(marketId));
+export function findMarketPda(creator: PublicKey, marketId: bigint | number): PublicKey {
+  const bn = new (require("bn.js"))(marketId.toString());
+  const buf = bn.toArrayLike(Buffer, "le", 8);
   return PublicKey.findProgramAddressSync(
     [Buffer.from("market"), creator.toBuffer(), buf],
     PROGRAM_ID

@@ -77,8 +77,7 @@ export default function CreatePage() {
       const program = getProgram(provider);
 
       const marketId = new BN(Date.now());
-      const idBuf = Buffer.alloc(8);
-      idBuf.writeBigUInt64LE(BigInt(marketId.toNumber()));
+      const idBuf = marketId.toArrayLike(Buffer, "le", 8);
 
       const [market] = PublicKey.findProgramAddressSync(
         [Buffer.from("market"), wallet.publicKey.toBuffer(), idBuf],
@@ -129,7 +128,15 @@ export default function CreatePage() {
       try {
         await getAccount(connection, creatorFeeAccount);
       } catch {
-        /* will be created if needed */
+        // Create creator's WSOL ATA if it doesn't exist
+        const { createAssociatedTokenAccountInstruction } = await import("@solana/spl-token");
+        const { Transaction } = await import("@solana/web3.js");
+        const createTx = new Transaction().add(
+          createAssociatedTokenAccountInstruction(
+            wallet.publicKey, creatorFeeAccount, wallet.publicKey, NATIVE_MINT
+          )
+        );
+        await provider.sendAndConfirm(createTx);
       }
 
       const now = Math.floor(Date.now() / 1000);
@@ -152,25 +159,12 @@ export default function CreatePage() {
           new BN(deadline),
           new BN(twapWindow),
           new BN(twapInterval),
-          5000, // battleTaxBps: 50%
-          100, // protocolFeeBps: 1%
-          1500, // sellPenaltyMaxBps: 15%
-          new BN(Math.floor(twapWindow * 0.5)), // protectionActivationOffset
-          { a: new BN(1_000_000), n: 1, b: new BN(1_000) }, // curveParams
-          new BN(1_000_000_000), // totalSupply
           nameA.trim(),
           symbolA.trim().toUpperCase(),
-          "", // uriA
+          "",
           nameB.trim(),
           symbolB.trim().toUpperCase(),
-          "", // uriB
-          { unlocked: {} }, // tradeMode
-          new BN(0), // emergencyWindow
-          0, // creatorFeeSplitBps
-          0, // referrerFeeSplitBps
-          { twap: {} }, // resolutionMode
-          PublicKey.default, // oracleAccount
-          new BN(0) // oracleThreshold
+          "",
         )
         .accounts({
           creator: wallet.publicKey,

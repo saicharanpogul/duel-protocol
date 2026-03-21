@@ -374,6 +374,9 @@ export default function MarketDetailPage() {
         );
       }
 
+      const configPda = findConfigPda();
+      const configData = await program.account.programConfig.fetch(configPda);
+
       const buyIx = await program.methods
         .buyTokens(selectedSide, new BN(lamports), new BN(1))
         .accounts({
@@ -386,7 +389,9 @@ export default function MarketDetailPage() {
           quoteMint: NATIVE_MINT,
           quoteVault: side.quoteReserveVault,
           buyerQuoteAccount: wsolAta,
-          config: findConfigPda(),
+          protocolFeeAccount: configData.protocolFeeAccount,
+          creatorFeeAccount: market.creatorFeeAccount,
+          config: configPda,
           tokenProgram: TOKEN_PROGRAM_ID,
           quoteTokenProgram: TOKEN_PROGRAM_ID,
         })
@@ -445,6 +450,9 @@ export default function MarketDetailPage() {
 
       const sellBn = new BN(Math.floor(tokenAmt));
 
+      const cfgPda = findConfigPda();
+      const cfgData = await program.account.programConfig.fetch(cfgPda);
+
       let sellIx;
       if (phase === "resolved") {
         sellIx = await program.methods
@@ -459,7 +467,7 @@ export default function MarketDetailPage() {
             quoteMint: NATIVE_MINT,
             quoteVault: side.quoteReserveVault,
             sellerQuoteAccount: wsolAta,
-            config: findConfigPda(),
+            config: cfgPda,
             tokenProgram: TOKEN_PROGRAM_ID,
             quoteTokenProgram: TOKEN_PROGRAM_ID,
           })
@@ -477,7 +485,9 @@ export default function MarketDetailPage() {
             quoteMint: NATIVE_MINT,
             quoteVault: side.quoteReserveVault,
             sellerQuoteAccount: wsolAta,
-            config: findConfigPda(),
+            protocolFeeAccount: cfgData.protocolFeeAccount,
+            creatorFeeAccount: market.creatorFeeAccount,
+            config: cfgPda,
             tokenProgram: TOKEN_PROGRAM_ID,
             quoteTokenProgram: TOKEN_PROGRAM_ID,
           })
