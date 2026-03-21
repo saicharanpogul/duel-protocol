@@ -6,7 +6,7 @@ use solana_address::Address;
 use duel_quasar_client::InitializeInstruction;
 
 fn setup() -> QuasarSvm {
-    let elf = include_bytes!("../target/deploy/duel_quasar.so");
+    let elf = include_bytes!("../../../target/deploy/duel_quasar.so");
     QuasarSvm::new()
         .with_program(&Pubkey::from(crate::ID), elf)
 }

@@ -2,9 +2,13 @@
 
 use quasar_lang::prelude::*;
 
+mod constants;
 mod errors;
+mod events;
 mod instructions;
+mod math;
 mod state;
+
 use instructions::*;
 
 declare_id!("CYgcgUW2UxMWLxHdqufppvVzAnRWZhBqn5Cko3WMdH6W");
