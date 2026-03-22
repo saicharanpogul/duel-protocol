@@ -11,7 +11,7 @@ pub mod state;
 
 use instructions::*;
 
-declare_id!("CYgcgUW2UxMWLxHdqufppvVzAnRWZhBqn5Cko3WMdH6W");
+declare_id!("J7pWj28bnEz7AEANx8o6q3MuC5Ugcqa2EXo7RAFdcb3G");
 
 #[program]
 mod duel_quasar {
