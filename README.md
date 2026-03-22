@@ -29,42 +29,35 @@ A competitive memecoin launch primitive on Solana where conflict IS the distribu
 
 The protocol is implemented in both [Anchor](https://www.anchor-lang.com/) and [Quasar](https://quasar-lang.com/) for direct comparison. Same logic, same instructions, same state layout.
 
-### Binary Size & Deploy Cost
+### Anchor + SPL Token vs Quasar + pTokens
 
-| Metric | Anchor | Quasar | Improvement |
+| Metric | Anchor + SPL Token | Quasar + pTokens | Improvement |
 |---|---|---|---|
-| Binary size | 654,912 bytes (639.6 KB) | 59,600 bytes (58.2 KB) | **11x smaller** |
-| Deploy cost | 4.559 SOL (~$684) | 0.416 SOL (~$63) | **11x cheaper** |
+| **Binary size** | 654,912 bytes (639.6 KB) | 59,600 bytes (58.2 KB) | **11x smaller** |
+| **Deploy cost** | 4.559 SOL (~$410) | 0.416 SOL (~$37) | **11x cheaper** |
+| **Account deserialization** | Borsh (copy + heap allocate) | Zero-copy (pointer cast, no alloc) | **0 allocations** |
+| **Runtime overhead** | ~180 KB base binary | ~0 KB base binary | **No bloat** |
+| **Discriminators** | 8-byte SHA256 (auto) | 1-byte explicit | **8x less instruction data** |
+| **TWAP min interval** | 10 seconds | 1 second (pTokens) | **10x denser sampling** |
+| **TWAP resolution** | Simple accumulator mean | Trimmed mean (5% outlier rejection) | **More manipulation resistant** |
+| **TWAP storage** | Single u128 accumulator | 360-slot ring buffer | **Granular price history** |
+| **Token operations** | Individual SPL CPI per transfer | Batch CPI ready (pTokens) | **Fewer transactions** |
+| **`no_std`** | No | Yes (default) | **No heap, no std** |
 
-*Deploy cost = rent-exempt minimum for program account. SOL price estimated at $150.*
+*Deploy cost = rent-exempt minimum for program account. SOL price estimated at ~$90.*
 
-### Why Quasar is Smaller
+### What Each Optimization Brings
 
-Quasar programs are `#![no_std]` with zero-copy account handling. Accounts are pointer-cast directly from the SVM input buffer with no deserialization, no heap allocation, and no copies. This eliminates the Borsh serialization overhead and Anchor runtime that inflate binary size.
+**Quasar** (program framework):
+- `#![no_std]` zero-copy accounts: pointer-cast directly from the SVM input buffer, no deserialization, no heap allocation. This is why the binary is 11x smaller.
+- Pod types for account fields (`.get()` to read, `PodU64::from()` to write)
+- Method-style CPI: `.transfer().invoke()` instead of `CpiContext::new(...)`
+- Explicit 1-byte discriminators instead of 8-byte SHA256 hashes
 
-### Key Differences
-
-| Feature | Anchor | Quasar |
-|---|---|---|
-| Account deserialization | Borsh (copy + allocate) | Zero-copy (pointer cast) |
-| Runtime overhead | ~180KB base | ~0KB base |
-| `no_std` | No | Yes (default) |
-| Account types | `Pubkey` | `Address` |
-| Integer fields | Native types | Pod types (`.get()` / `PodU64::from()`) |
-| Enums in accounts | Supported | Use `u8` constants |
-| CPI pattern | `CpiContext::new(...)` | `.transfer().invoke()` |
-| Discriminators | Auto (8-byte SHA256) | Explicit (`discriminator = N`) |
-| Context type | `Context<T>` | `Ctx<T>` |
-| Return type | `Result<()>` | `Result<(), ProgramError>` |
-| String/Vec in accounts | Heap-allocated | `String<'a, N>` / `Vec<'a, T, N>` (inline) |
-
-### pTokens (SIMD-0266) Optimizations
-
-The `ptokens` branch adds optimizations enabled by Solana's pToken standard:
-
-- **Dense TWAP sampling**: MIN_TWAP_INTERVAL reduced from 10s to 1s (viable with cheaper pToken transactions)
-- **Trimmed-mean TWAP**: 360-slot ring buffer with 5% outlier rejection from each tail, more manipulation-resistant than simple accumulator-based TWAP
-- **Batch CPI preparation**: Feature-gated blocks for future batch token operations when pTokens launches on mainnet
+**pTokens (SIMD-0266)** (token standard):
+- **Dense TWAP sampling**: With pTokens' cheaper transaction costs, TWAP can sample every 1 second instead of every 10 seconds. 720 samples in a 12-minute window vs 72. Makes last-second manipulation 10x harder.
+- **Trimmed-mean TWAP**: 360-slot ring buffer stores individual price samples. At resolution, the top 5% and bottom 5% are discarded before averaging. A whale spiking the price for 30 seconds affects 0 samples instead of skewing the mean.
+- **Batch CPI**: Feature-gated preparation for batching multiple token transfers in a single CPI call when pTokens launches on mainnet, reducing per-trade compute.
 
 ## Instructions (12)
 
