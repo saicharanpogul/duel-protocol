@@ -24,3 +24,12 @@ pub use emergency_resolve::*;
 
 pub mod close_market;
 pub use close_market::*;
+
+pub mod resolve_and_graduate;
+pub use resolve_and_graduate::*;
+
+pub mod claim_pool_fees;
+pub use claim_pool_fees::*;
+
+pub mod close_quote_vault;
+pub use close_quote_vault::*;

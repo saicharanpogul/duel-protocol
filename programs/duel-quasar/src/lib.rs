@@ -103,6 +103,27 @@ mod duel_quasar {
     pub fn close_market(ctx: Ctx<CloseMarket>) -> Result<(), ProgramError> {
         ctx.accounts.handler()
     }
+
+    #[instruction(discriminator = 9)]
+    pub fn resolve_and_graduate(
+        ctx: Ctx<ResolveAndGraduate>,
+        expected_winner: u8,
+    ) -> Result<(), ProgramError> {
+        ctx.accounts.handler(expected_winner)
+    }
+
+    #[instruction(discriminator = 10)]
+    pub fn claim_pool_fees(ctx: Ctx<ClaimPoolFees>) -> Result<(), ProgramError> {
+        ctx.accounts.handler()
+    }
+
+    #[instruction(discriminator = 11)]
+    pub fn close_quote_vault(
+        ctx: Ctx<CloseQuoteVault>,
+        side: u8,
+    ) -> Result<(), ProgramError> {
+        ctx.accounts.handler(side)
+    }
 }
 
 #[cfg(test)]
