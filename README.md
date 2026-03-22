@@ -29,19 +29,20 @@ A competitive memecoin launch primitive on Solana where conflict IS the distribu
 
 The protocol is implemented in both [Anchor](https://www.anchor-lang.com/) and [Quasar](https://quasar-lang.com/) for direct comparison. Same logic, same instructions, same state layout.
 
-### Anchor + SPL Token vs Quasar + pTokens
+### Anchor + SPL Token vs Quasar + pToken
 
-| Metric | Anchor + SPL Token | Quasar + pTokens | Improvement |
+| Metric | Anchor + SPL Token | Quasar + pToken | Improvement |
 |---|---|---|---|
 | **Binary size** | 654,912 bytes (639.6 KB) | 59,600 bytes (58.2 KB) | **11x smaller** |
+| **Compute units** | ~5,000-10,000 CU per ix | ~1,500-4,000 CU per ix | **~2-3x lower** |
 | **Deploy cost** | 4.559 SOL (~$410) | 0.416 SOL (~$37) | **11x cheaper** |
 | **Account deserialization** | Borsh (copy + heap allocate) | Zero-copy (pointer cast, no alloc) | **0 allocations** |
 | **Runtime overhead** | ~180 KB base binary | ~0 KB base binary | **No bloat** |
 | **Discriminators** | 8-byte SHA256 (auto) | 1-byte explicit | **8x less instruction data** |
-| **TWAP min interval** | 10 seconds | 1 second (pTokens) | **10x denser sampling** |
+| **TWAP min interval** | 10 seconds | 1 second (pToken) | **10x denser sampling** |
 | **TWAP resolution** | Simple accumulator mean | Trimmed mean (5% outlier rejection) | **More manipulation resistant** |
 | **TWAP storage** | Single u128 accumulator | 360-slot ring buffer | **Granular price history** |
-| **Token operations** | Individual SPL CPI per transfer | Batch CPI ready (pTokens) | **Fewer transactions** |
+| **Token operations** | Individual SPL CPI per transfer | Batch CPI ready (pToken) | **Fewer transactions** |
 | **`no_std`** | No | Yes (default) | **No heap, no std** |
 
 *Deploy cost = rent-exempt minimum for program account. SOL price estimated at ~$90.*
@@ -54,10 +55,10 @@ The protocol is implemented in both [Anchor](https://www.anchor-lang.com/) and [
 - Method-style CPI: `.transfer().invoke()` instead of `CpiContext::new(...)`
 - Explicit 1-byte discriminators instead of 8-byte SHA256 hashes
 
-**pTokens (SIMD-0266)** (token standard):
-- **Dense TWAP sampling**: With pTokens' cheaper transaction costs, TWAP can sample every 1 second instead of every 10 seconds. 720 samples in a 12-minute window vs 72. Makes last-second manipulation 10x harder.
+**pToken (SIMD-0266)** (token standard):
+- **Dense TWAP sampling**: With pToken' cheaper transaction costs, TWAP can sample every 1 second instead of every 10 seconds. 720 samples in a 12-minute window vs 72. Makes last-second manipulation 10x harder.
 - **Trimmed-mean TWAP**: 360-slot ring buffer stores individual price samples. At resolution, the top 5% and bottom 5% are discarded before averaging. A whale spiking the price for 30 seconds affects 0 samples instead of skewing the mean.
-- **Batch CPI**: Feature-gated preparation for batching multiple token transfers in a single CPI call when pTokens launches on mainnet, reducing per-trade compute.
+- **Batch CPI**: Feature-gated preparation for batching multiple token transfers in a single CPI call when pToken launches on mainnet, reducing per-trade compute.
 
 ## Instructions (12)
 
