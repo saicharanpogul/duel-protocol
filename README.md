@@ -34,7 +34,7 @@ The protocol is implemented in both [Anchor](https://www.anchor-lang.com/) and [
 | Metric | Anchor + SPL Token | Quasar + pToken | Improvement |
 |---|---|---|---|
 | **Binary size** | 654,912 bytes (639.6 KB) | 59,600 bytes (58.2 KB) | **11x smaller** |
-| **Compute units** | ~5,000-10,000 CU per ix | ~1,500-4,000 CU per ix | **~2-3x lower** |
+| **Compute units** | 8K - 226K CU per ix | ~3K - 80K CU per ix | **~2-3x lower** |
 | **Deploy cost** | 4.559 SOL (~$410) | 0.416 SOL (~$37) | **11x cheaper** |
 | **Account deserialization** | Borsh (copy + heap allocate) | Zero-copy (pointer cast, no alloc) | **0 allocations** |
 | **Runtime overhead** | ~180 KB base binary | ~0 KB base binary | **No bloat** |
@@ -45,7 +45,17 @@ The protocol is implemented in both [Anchor](https://www.anchor-lang.com/) and [
 | **Token operations** | Individual SPL CPI per transfer | Batch CPI ready (pToken) | **Fewer transactions** |
 | **`no_std`** | No | Yes (default) | **No heap, no std** |
 
-*Deploy cost = rent-exempt minimum for program account. SOL price estimated at ~$90.*
+*Anchor CU measured on-chain. Quasar CU estimated from framework benchmarks (~2-3x reduction). Deploy cost = rent-exempt minimum. SOL ~$90.*
+
+**Anchor CU breakdown (measured on-chain):**
+
+| Instruction | Compute Units |
+|---|---|
+| `initialize_config` | 8,149 |
+| `initialize_market` | 226,343 |
+| `buy_tokens` | 103,022 |
+| `sell_tokens` | 51,648 |
+| `record_twap_sample` | 7,568 |
 
 ### What Each Optimization Brings
 
