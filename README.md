@@ -1,120 +1,141 @@
 # Duel Protocol
 
-A general-purpose on-chain primitive for community-scale competitive markets with self-contained liquidity and manipulation-resistant TWAP resolution.
+Two tokens enter. One survives. The winner graduates to DEX.
 
-Two bonding curve tokens compete. The side with the higher time-weighted average price (TWAP) wins. A configurable portion of the losing side's reserve is transferred to the winning side. No external liquidity providers, no oracles (by default), no market makers. This is pump.fun meets Twitter polls meets fantasy sports.
-
-## What This Is
-
-A gamified engagement primitive where communities put skin in the game on opinions, debates, and competitions. The target user is a fan putting $5 to $500 on their side. The bonding curve is the market maker. The TWAP is the judge.
-
-## What This Is Not
-
-A prediction market for sophisticated traders. Duel does not produce calibrated probability signals, does not offer fixed payouts, and does not compete with Polymarket. See the [Technical Thesis](docs/THESIS.md) for honest limitations.
+A competitive memecoin launch primitive on Solana where conflict IS the distribution mechanism. Both communities spend real SOL backing their side. At resolution, the winner takes all liquidity and graduates to Jupiter via Meteora DAMM v2. The loser dies.
 
 ## How It Works
 
-1. A market is created with two sides (Side A, Side B), each with its own bonding curve.
-2. Participants buy and sell tokens on either curve. The bonding curve is the always-available counterparty.
-3. During the final observation window, the protocol samples prices at fixed intervals.
-4. At deadline, the side with the higher TWAP wins.
-5. The losing side's reserve (battle_tax %) is dumped into the winning side's reserve.
-6. Winners sell into a fatter curve to realize gains.
-7. Winning tokens can graduate to Meteora DAMM v2 for continued DEX trading (Jupiter-compatible).
+1. A duel is created with two sides (Side A vs Side B), each with a bonding curve token
+2. Users buy and sell tokens on either side. Bonding curve is the market maker. No LPs needed.
+3. During the TWAP observation window, prices are sampled at fixed intervals
+4. At deadline, the side with the higher time-weighted average price wins
+5. 100% of the loser's SOL reserve is transferred to the winner
+6. Winner's token graduates to Meteora DAMM v2 (Jupiter-tradable). LP permanently locked.
+7. Loser's token metadata is updated to [DEFEATED]
 
 ## Architecture
 
-Built from scratch on Solana using Anchor 0.32.1. Post-resolution tokens graduate to Meteora DAMM v2 via CPI, making them immediately tradeable on Jupiter.
+| Component | Stack | Description |
+|---|---|---|
+| Program (Anchor) | Rust, Anchor 0.31.1 | 12 instructions, bonding curve, TWAP resolution |
+| Program (Quasar) | Rust, Quasar | Same logic, 11x smaller binary, 11x cheaper deploy |
+| SDK | TypeScript | Instruction builders, math helpers, event indexer |
+| Frontend | Next.js 16, React 19 | Trading UI with bonding curve charts |
+| Backend | Hono, PostgreSQL | REST API, event indexer, TWAP cranker |
+| Cranker | TypeScript | Permissionless TWAP sampling and resolution |
 
-See [Technical Thesis](docs/THESIS.md) for full mechanism design.
-See [Architecture Reference](.claude/ARCHITECTURE.md) for account layouts and instruction specs.
+## Anchor vs Quasar Comparison
 
-## Instructions (18)
+The protocol is implemented in both [Anchor](https://www.anchor-lang.com/) and [Quasar](https://quasar-lang.com/) for direct comparison. Same logic, same instructions, same state layout.
+
+### Binary Size & Deploy Cost
+
+| Metric | Anchor | Quasar | Improvement |
+|---|---|---|---|
+| Binary size | 654,912 bytes (639.6 KB) | 59,600 bytes (58.2 KB) | **11x smaller** |
+| Deploy cost | 4.559 SOL (~$684) | 0.416 SOL (~$63) | **11x cheaper** |
+
+*Deploy cost = rent-exempt minimum for program account. SOL price estimated at $150.*
+
+### Why Quasar is Smaller
+
+Quasar programs are `#![no_std]` with zero-copy account handling. Accounts are pointer-cast directly from the SVM input buffer with no deserialization, no heap allocation, and no copies. This eliminates the Borsh serialization overhead and Anchor runtime that inflate binary size.
+
+### Key Differences
+
+| Feature | Anchor | Quasar |
+|---|---|---|
+| Account deserialization | Borsh (copy + allocate) | Zero-copy (pointer cast) |
+| Runtime overhead | ~180KB base | ~0KB base |
+| `no_std` | No | Yes (default) |
+| Account types | `Pubkey` | `Address` |
+| Integer fields | Native types | Pod types (`.get()` / `PodU64::from()`) |
+| Enums in accounts | Supported | Use `u8` constants |
+| CPI pattern | `CpiContext::new(...)` | `.transfer().invoke()` |
+| Discriminators | Auto (8-byte SHA256) | Explicit (`discriminator = N`) |
+| Context type | `Context<T>` | `Ctx<T>` |
+| Return type | `Result<()>` | `Result<(), ProgramError>` |
+| String/Vec in accounts | Heap-allocated | `String<'a, N>` / `Vec<'a, T, N>` (inline) |
+
+### pTokens (SIMD-0266) Optimizations
+
+The `ptokens` branch adds optimizations enabled by Solana's pToken standard:
+
+- **Dense TWAP sampling**: MIN_TWAP_INTERVAL reduced from 10s to 1s (viable with cheaper pToken transactions)
+- **Trimmed-mean TWAP**: 360-slot ring buffer with 5% outlier rejection from each tail, more manipulation-resistant than simple accumulator-based TWAP
+- **Batch CPI preparation**: Feature-gated blocks for future batch token operations when pTokens launches on mainnet
+
+## Instructions (12)
 
 | Category | Instructions |
 |---|---|
 | Admin | `initialize_config`, `update_config` |
 | Market | `initialize_market` |
-| Trading | `buy_tokens`, `sell_tokens`, `sell_post_resolution` |
-| TWAP & Resolution | `record_twap_sample`, `resolve_market`, `resolve_with_oracle`, `emergency_resolve` |
-| DEX Graduation | `graduate_to_dex`, `claim_pool_fees`, `lock_position`, `remove_liquidity`, `close_position` |
+| Trading | `buy_tokens`, `sell_tokens` |
+| TWAP & Resolution | `record_twap_sample`, `resolve_and_graduate`, `emergency_resolve` |
+| Post-Resolution | `sell_post_resolution` (emergency draw only) |
+| DEX | `claim_pool_fees` |
 | Cleanup | `close_quote_vault`, `close_market` |
+
+## Economics
+
+- **1B tokens per side**, 0 decimals, quadratic bonding curve (`price = k^2 / 10^9 + 1`)
+- **1% trade fee** on every buy and sell, split 50/50 between protocol and market creator
+- **Winner takes all**: 100% of loser's SOL reserve transferred to winner at resolution
+- **LP permanently locked** on Meteora DAMM v2 after graduation
+- **Creator incentive**: 50% of trade fees + 75% of post-graduation LP fees
 
 ## Project Structure
 
 ```
-programs/duel/     Anchor program (Rust) - 18 instructions, 22 error codes
-sdk/               TypeScript SDK - 18 builders, 5 math helpers, event indexer
-tests/             Integration tests - 85 tests across 8 suites
-scripts/           Cranker daemon for TWAP sampling and resolution
-app/               duels.fun frontend (Next.js)
-example/           Developer reference app (Next.js)
-docs/              Documentation and thesis
+programs/duel/              Anchor program (Rust) - 12 instructions
+programs/duel-quasar/       Quasar program (Rust) - same 12 instructions, 11x smaller
+sdk/                        TypeScript SDK - instruction builders, math, indexer
+tests/                      Integration tests - 74 tests across 8 suites
+scripts/                    Cranker daemon + curve simulator
+app/                        duels.fun frontend (Next.js)
+backend/                    REST API, event indexer, cranker (Docker)
+docs/                       Technical thesis
 ```
-
-## SDK
-
-```typescript
-import {
-  createDuelProgram,
-  buildBuyTokensInstruction,
-  buildResolveMarketInstruction,
-  calculateTokensOut,
-  calculateSentiment,
-} from "@duel-protocol/sdk";
-```
-
-**18 instruction builders** covering the full lifecycle: config, market creation, trading, TWAP, resolution, graduation, LP management, and cleanup.
-
-**5 math helpers** mirroring on-chain bonding curve: `calculateReserve`, `calculateTokensOut`, `calculateQuoteOut`, `calculateSentiment`, `calculateSellPenalty`.
-
-**Event indexer** with real-time WebSocket subscription and historical backfill.
 
 ## Development
 
 ```bash
 # Install dependencies
-yarn install
+bun install
 
-# Build the program
+# Build Anchor program
 anchor build
 
-# Run all tests (85 tests)
+# Build Quasar program
+cd programs/duel-quasar && quasar build
+
+# Run tests (74 passing)
 anchor test
 
-# Run tests without rebuilding
-anchor test --skip-build
+# Start frontend
+cd app && npm run dev
 
-# Start TWAP cranker
-RPC_URL=http://localhost:8899 npx ts-node scripts/cranker.ts
+# Start cranker
+ANCHOR_PROVIDER_URL=http://localhost:8899 bun run scripts/cranker.ts
 ```
 
-## Test Suites
+## Test Suites (74 tests)
 
-| Suite | Tests | Coverage |
-|---|---|---|
-| Core lifecycle | 12 | Create, buy, sell, TWAP, resolve, sell post-resolution |
-| Edge cases | 11 | Invalid inputs, slippage, double resolve, zero amounts |
-| Capital efficiency | 11 | Bonding curve math, penalty timing, TWAP accuracy |
-| DEX graduation | 7 | Meteora CPI, LP fees, double graduation prevention |
-| Close market | 3 | Rejection gates, rent recovery |
-| Protocol config | 8 | Pause/unpause, fee updates, admin transfer |
-| TWAP advanced | 4 | Draw detection, creator fees, observation clamping |
-| Game theory | 29 | Nash equilibrium, last-mover advantage, multi-market isolation |
-
-## Use Cases
-
-- Subjective debates (Messi vs Ronaldo, Vim vs Emacs)
-- Creative battles (musicians, artists competing for fan support)
-- Token launches via competition (battle as launch narrative, survivors graduate to DEX)
-- Small DAO governance (50-person DAOs)
-- Community-driven prediction
-- Meme token head-to-head battles
-- Competitive gaming and esports sentiment markets
+| Suite | Description |
+|---|---|
+| Core lifecycle | Create, buy, sell, TWAP, resolve + graduate |
+| Edge cases | Invalid inputs, slippage, double resolve, wrong winner |
+| Capital efficiency | Trade fees, roundtrip, multi-buyer, winner takes all |
+| DEX graduation | Meteora DAMM v2 E2E, LP lock, fee claims |
+| Protocol config | Pause, fee updates, admin transfer |
+| Close market | Closure gates, rent recovery |
+| Emergency | Emergency resolve rejection |
 
 ## Status
 
-Core protocol complete. 85/85 tests passing. SDK complete. Not audited. Do not use in production.
+Core protocol complete. 74/74 tests passing. Anchor + Quasar implementations. SDK complete. Not audited.
 
 ## License
 
