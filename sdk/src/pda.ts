@@ -119,6 +119,54 @@ export function findMetadataPda(mint: PublicKey): [PublicKey, number] {
   );
 }
 
+// ─── Mode 2 (Compare Duel) PDA Helpers ─────────────────────────────────
+
+/**
+ * Derive the CompareDuel PDA.
+ * Seeds: ["compare_duel", creator, duel_id (u64 LE)]
+ */
+export function findCompareDuelPda(
+  creator: PublicKey,
+  duelId: number | bigint
+): [PublicKey, number] {
+  const buf = Buffer.alloc(8);
+  buf.writeBigUInt64LE(BigInt(duelId));
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("compare_duel"), creator.toBuffer(), buf],
+    PROGRAM_ID
+  );
+}
+
+/**
+ * Derive a Compare Vault PDA.
+ * Seeds: ["compare_vault", compareDuel, sideIndex (u8)]
+ * @param compareDuel - CompareDuel account public key
+ * @param sideIndex - 0 for Side A, 1 for Side B
+ */
+export function findCompareVaultPda(
+  compareDuel: PublicKey,
+  sideIndex: number
+): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("compare_vault"), compareDuel.toBuffer(), Buffer.from([sideIndex])],
+    PROGRAM_ID
+  );
+}
+
+/**
+ * Derive a Deposit PDA.
+ * Seeds: ["deposit", compareDuel, depositor]
+ */
+export function findDepositPda(
+  compareDuel: PublicKey,
+  depositor: PublicKey
+): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("deposit"), compareDuel.toBuffer(), depositor.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
 // ─── DAMM v2 PDA Helpers ───────────────────────────────────────────────
 
 import { METEORA_DAMM_V2_PROGRAM_ID, WSOL_MINT } from "./constants";

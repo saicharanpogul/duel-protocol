@@ -280,6 +280,111 @@ export type Duel = {
       "args": []
     },
     {
+      "name": "closeCompareDuel",
+      "discriminator": [
+        84,
+        12,
+        253,
+        17,
+        166,
+        57,
+        183,
+        90
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Duel creator or protocol admin"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "compareDuel",
+          "writable": true
+        },
+        {
+          "name": "poolVaultA",
+          "docs": [
+            "Pool vault A"
+          ],
+          "writable": true
+        },
+        {
+          "name": "poolVaultB",
+          "docs": [
+            "Pool vault B"
+          ],
+          "writable": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Protocol config (for admin check)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "closeDeposit",
+      "discriminator": [
+        200,
+        19,
+        254,
+        192,
+        15,
+        110,
+        209,
+        179
+      ],
+      "accounts": [
+        {
+          "name": "depositor",
+          "docs": [
+            "Depositor receives rent back"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "depositRecord",
+          "writable": true
+        },
+        {
+          "name": "compareDuel"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "closeMarket",
       "discriminator": [
         88,
@@ -411,6 +516,276 @@ export type Duel = {
       ]
     },
     {
+      "name": "createCompareDuel",
+      "discriminator": [
+        29,
+        28,
+        121,
+        172,
+        192,
+        16,
+        107,
+        9
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "compareDuel",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  97,
+                  114,
+                  101,
+                  95,
+                  100,
+                  117,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "duelId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "quoteMint",
+          "docs": [
+            "Quote token mint (WSOL)"
+          ]
+        },
+        {
+          "name": "poolVaultA",
+          "docs": [
+            "WSOL vault for Side A deposits"
+          ],
+          "writable": true
+        },
+        {
+          "name": "poolVaultB",
+          "docs": [
+            "WSOL vault for Side B deposits"
+          ],
+          "writable": true
+        },
+        {
+          "name": "oracleA",
+          "docs": [
+            "Pyth price feed account for token A"
+          ]
+        },
+        {
+          "name": "oracleB",
+          "docs": [
+            "Pyth price feed account for token B"
+          ]
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Protocol config (pause check + fee rates)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "protocolFeeAccount"
+        },
+        {
+          "name": "creatorFeeAccount",
+          "docs": [
+            "Creator fee recipient"
+          ]
+        },
+        {
+          "name": "tokenAMint",
+          "docs": [
+            "Token A mint (existing token, e.g. $BONK)"
+          ]
+        },
+        {
+          "name": "tokenBMint",
+          "docs": [
+            "Token B mint (existing token, e.g. $WIF)"
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "tokenProgram"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "duelId",
+          "type": "u64"
+        },
+        {
+          "name": "deadline",
+          "type": "i64"
+        },
+        {
+          "name": "twapWindow",
+          "type": "u64"
+        },
+        {
+          "name": "twapInterval",
+          "type": "u64"
+        },
+        {
+          "name": "minDeposit",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "deposit",
+      "discriminator": [
+        242,
+        35,
+        198,
+        137,
+        82,
+        225,
+        242,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "depositor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "compareDuel",
+          "writable": true
+        },
+        {
+          "name": "depositRecord",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "compareDuel"
+              },
+              {
+                "kind": "account",
+                "path": "depositor"
+              }
+            ]
+          }
+        },
+        {
+          "name": "poolVault",
+          "docs": [
+            "WSOL vault for the selected side (A or B)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "depositorWsolAccount",
+          "docs": [
+            "Depositor's WSOL token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "quoteMint",
+          "docs": [
+            "Quote token mint (WSOL)"
+          ]
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Protocol config (pause check)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "tokenProgram"
+        }
+      ],
+      "args": [
+        {
+          "name": "side",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "emergencyResolve",
       "discriminator": [
         63,
@@ -463,6 +838,55 @@ export type Duel = {
         {
           "name": "sideB",
           "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "emergencyResolveCompare",
+      "discriminator": [
+        16,
+        201,
+        69,
+        94,
+        218,
+        142,
+        179,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "resolver",
+          "docs": [
+            "Anyone can trigger emergency resolution after the window passes"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "compareDuel",
+          "writable": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Protocol config"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -918,6 +1342,45 @@ export type Duel = {
       ]
     },
     {
+      "name": "recordCompareTwap",
+      "discriminator": [
+        1,
+        98,
+        112,
+        201,
+        48,
+        101,
+        57,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "docs": [
+            "Anyone can crank (permissionless)"
+          ],
+          "signer": true
+        },
+        {
+          "name": "compareDuel",
+          "writable": true
+        },
+        {
+          "name": "oracleA",
+          "docs": [
+            "Pyth price feed account for token A"
+          ]
+        },
+        {
+          "name": "oracleB",
+          "docs": [
+            "Pyth price feed account for token B"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "recordTwapSample",
       "discriminator": [
         31,
@@ -1109,6 +1572,92 @@ export type Duel = {
           "type": "u8"
         }
       ]
+    },
+    {
+      "name": "resolveCompare",
+      "discriminator": [
+        35,
+        52,
+        6,
+        169,
+        248,
+        144,
+        39,
+        139
+      ],
+      "accounts": [
+        {
+          "name": "resolver",
+          "docs": [
+            "Anyone can trigger resolution (permissionless)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "compareDuel",
+          "writable": true
+        },
+        {
+          "name": "poolVaultA",
+          "docs": [
+            "WSOL vault for Side A"
+          ],
+          "writable": true
+        },
+        {
+          "name": "poolVaultB",
+          "docs": [
+            "WSOL vault for Side B"
+          ],
+          "writable": true
+        },
+        {
+          "name": "protocolFeeAccount",
+          "docs": [
+            "Protocol fee recipient (WSOL token account)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "creatorFeeAccount",
+          "docs": [
+            "Creator fee recipient (WSOL token account)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "quoteMint",
+          "docs": [
+            "Quote token mint (WSOL)"
+          ]
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Protocol config (fee rates)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram"
+        }
+      ],
+      "args": []
     },
     {
       "name": "sellPostResolution",
@@ -1425,9 +1974,86 @@ export type Duel = {
           }
         }
       ]
+    },
+    {
+      "name": "withdraw",
+      "discriminator": [
+        183,
+        18,
+        70,
+        156,
+        148,
+        109,
+        161,
+        34
+      ],
+      "accounts": [
+        {
+          "name": "depositor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "compareDuel"
+        },
+        {
+          "name": "depositRecord",
+          "writable": true
+        },
+        {
+          "name": "poolVault",
+          "docs": [
+            "Winning side's pool vault (or vault matching deposit side for draw)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "depositorWsolAccount",
+          "docs": [
+            "Depositor's WSOL token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "quoteMint",
+          "docs": [
+            "Quote token mint (WSOL)"
+          ]
+        },
+        {
+          "name": "tokenProgram"
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
+    {
+      "name": "compareDuel",
+      "discriminator": [
+        23,
+        54,
+        58,
+        153,
+        14,
+        73,
+        250,
+        244
+      ]
+    },
+    {
+      "name": "deposit",
+      "discriminator": [
+        148,
+        146,
+        121,
+        66,
+        207,
+        173,
+        21,
+        227
+      ]
+    },
     {
       "name": "market",
       "discriminator": [
@@ -1470,6 +2096,45 @@ export type Duel = {
   ],
   "events": [
     {
+      "name": "compareDuelCreated",
+      "discriminator": [
+        95,
+        176,
+        47,
+        72,
+        59,
+        38,
+        94,
+        168
+      ]
+    },
+    {
+      "name": "compareResolved",
+      "discriminator": [
+        20,
+        214,
+        78,
+        159,
+        249,
+        46,
+        206,
+        216
+      ]
+    },
+    {
+      "name": "compareTwapSampled",
+      "discriminator": [
+        249,
+        72,
+        174,
+        133,
+        51,
+        229,
+        49,
+        23
+      ]
+    },
+    {
       "name": "configUpdated",
       "discriminator": [
         40,
@@ -1480,6 +2145,19 @@ export type Duel = {
         19,
         198,
         194
+      ]
+    },
+    {
+      "name": "deposited",
+      "discriminator": [
+        111,
+        141,
+        26,
+        45,
+        161,
+        35,
+        100,
+        57
       ]
     },
     {
@@ -1571,6 +2249,19 @@ export type Duel = {
         69,
         65,
         147
+      ]
+    },
+    {
+      "name": "withdrawn",
+      "discriminator": [
+        20,
+        89,
+        223,
+        198,
+        194,
+        124,
+        219,
+        13
       ]
     }
   ],
@@ -1679,9 +2370,362 @@ export type Duel = {
       "code": 6020,
       "name": "insufficientReserveForGraduation",
       "msg": "Insufficient reserve for DEX graduation (minimum 0.1 SOL)"
+    },
+    {
+      "code": 6021,
+      "name": "invalidOracle",
+      "msg": "Oracle account is not a valid Pyth price feed"
+    },
+    {
+      "code": 6022,
+      "name": "oracleStale",
+      "msg": "Oracle price is stale (older than 60 seconds)"
+    },
+    {
+      "code": 6023,
+      "name": "oracleConfidenceTooWide",
+      "msg": "Oracle confidence interval exceeds 10% of price"
+    },
+    {
+      "code": 6024,
+      "name": "duelNotResolved",
+      "msg": "Duel must be resolved before withdrawal"
+    },
+    {
+      "code": 6025,
+      "name": "alreadyWithdrawn",
+      "msg": "Deposit has already been withdrawn"
+    },
+    {
+      "code": 6026,
+      "name": "depositTooSmall",
+      "msg": "Deposit amount is below minimum"
+    },
+    {
+      "code": 6027,
+      "name": "depositPeriodEnded",
+      "msg": "Deposit period has ended (TWAP window started)"
+    },
+    {
+      "code": 6028,
+      "name": "oneSideEmpty",
+      "msg": "Cannot resolve: one side has zero deposits"
+    },
+    {
+      "code": 6029,
+      "name": "notWinner",
+      "msg": "Losing side has no payout"
     }
   ],
   "types": [
+    {
+      "name": "compareDuel",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Account version for future upgrades"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Duel creator"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "duelId",
+            "docs": [
+              "Unique ID per creator"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "tokenAMint",
+            "docs": [
+              "Existing token mint A (e.g., $BONK)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "tokenBMint",
+            "docs": [
+              "Existing token mint B (e.g., $WIF)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "oracleA",
+            "docs": [
+              "Pyth price feed for token A"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "oracleB",
+            "docs": [
+              "Pyth price feed for token B"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "poolVaultA",
+            "docs": [
+              "WSOL vault for Side A deposits"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "poolVaultB",
+            "docs": [
+              "WSOL vault for Side B deposits"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "sideATotal",
+            "docs": [
+              "Total SOL deposited on Side A (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "sideBTotal",
+            "docs": [
+              "Total SOL deposited on Side B (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "deadline",
+            "docs": [
+              "Unix timestamp deadline"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "twapWindow",
+            "docs": [
+              "TWAP observation window in seconds"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "twapInterval",
+            "docs": [
+              "TWAP sampling interval in seconds"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "startPriceA",
+            "docs": [
+              "Price at first TWAP sample for token A (scaled 10^9)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "startPriceB",
+            "docs": [
+              "Price at first TWAP sample for token B (scaled 10^9)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "twapAccumulatorA",
+            "docs": [
+              "TWAP price accumulator for token A"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "twapAccumulatorB",
+            "docs": [
+              "TWAP price accumulator for token B"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "twapSamplesCount",
+            "docs": [
+              "Number of TWAP samples recorded"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "lastSampleTs",
+            "docs": [
+              "Timestamp of last TWAP sample"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Current duel status (reuses Mode 1 MarketStatus enum)"
+            ],
+            "type": {
+              "defined": {
+                "name": "marketStatus"
+              }
+            }
+          },
+          {
+            "name": "winner",
+            "docs": [
+              "Winner side index: None = draw/unresolved, Some(0) = A, Some(1) = B"
+            ],
+            "type": {
+              "option": "u8"
+            }
+          },
+          {
+            "name": "netPool",
+            "docs": [
+              "Total pool minus fees, set at resolution (used by withdraw)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "minDeposit",
+            "docs": [
+              "Minimum deposit in lamports"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "creatorFeeAccount",
+            "docs": [
+              "Creator fee recipient (WSOL token account)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "protocolFeeAccount",
+            "docs": [
+              "Protocol fee recipient (WSOL token account)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "emergencyWindow",
+            "docs": [
+              "Emergency resolution window in seconds after deadline"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved for future fields"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "compareDuelCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "duel",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "tokenAMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "tokenBMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "deadline",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "compareResolved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "duel",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner",
+            "type": {
+              "option": "u8"
+            }
+          },
+          {
+            "name": "perfABps",
+            "type": "i64"
+          },
+          {
+            "name": "perfBBps",
+            "type": "i64"
+          },
+          {
+            "name": "netPool",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "compareTwapSampled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "duel",
+            "type": "pubkey"
+          },
+          {
+            "name": "priceA",
+            "type": "u64"
+          },
+          {
+            "name": "priceB",
+            "type": "u64"
+          },
+          {
+            "name": "sampleCount",
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
     {
       "name": "configUpdated",
       "type": {
@@ -1705,6 +2749,80 @@ export type Duel = {
           },
           {
             "name": "marketCreationFee",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "deposit",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "duel",
+            "docs": [
+              "Parent CompareDuel PDA"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "depositor",
+            "docs": [
+              "Depositor wallet"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "side",
+            "docs": [
+              "Side index: 0 = A, 1 = B"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "SOL deposited (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "withdrawn",
+            "docs": [
+              "Whether the deposit has been withdrawn"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "deposited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "duel",
+            "type": "pubkey"
+          },
+          {
+            "name": "depositor",
+            "type": "pubkey"
+          },
+          {
+            "name": "side",
+            "type": "u8"
+          },
+          {
+            "name": "amount",
             "type": "u64"
           }
         ]
@@ -2259,6 +3377,26 @@ export type Duel = {
           {
             "name": "timestamp",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "withdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "duel",
+            "type": "pubkey"
+          },
+          {
+            "name": "depositor",
+            "type": "pubkey"
+          },
+          {
+            "name": "payout",
+            "type": "u64"
           }
         ]
       }

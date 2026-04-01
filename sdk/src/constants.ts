@@ -100,3 +100,14 @@ export const MIN_SQRT_PRICE = BigInt("4295048016");
 
 /** Meteora DAMM v2 MAX_SQRT_PRICE */
 export const MAX_SQRT_PRICE = BigInt("79226673521066979257578248091");
+
+// ── Mode 2 (Compare Duel) ─────────────────────────────────────────────
+
+/** Default minimum deposit in lamports (10K lamports) */
+export const DEFAULT_MIN_DEPOSIT = 10_000;
+
+/** Pyth price account magic number */
+export const PYTH_PRICE_MAGIC = 0xa1b2c3d4;
+
+/** Price scaling factor (10^9) for oracle-based TWAP */
+export const PRICE_SCALE = 1_000_000_000;

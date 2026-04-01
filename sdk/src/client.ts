@@ -34,6 +34,9 @@ import {
   findConfigPda,
   findMetadataPda,
   findMintPda,
+  findCompareDuelPda,
+  findCompareVaultPda,
+  findDepositPda,
 } from "./pda";
 
 // ── Program Instance ────────────────────────────────────────────────────
@@ -51,6 +54,50 @@ const IDL = IDL_JSON as any;
 export function createDuelProgram(provider: AnchorProvider): Program<Duel> {
   return new Program<Duel>(IDL, provider);
 }
+
+// ── Account Types ──────────────────────────────────────────────────────
+
+/** Decoded CompareDuel account data. */
+export type CompareDuelAccount = {
+  version: number;
+  bump: number;
+  authority: PublicKey;
+  duelId: BN;
+  tokenAMint: PublicKey;
+  tokenBMint: PublicKey;
+  oracleA: PublicKey;
+  oracleB: PublicKey;
+  poolVaultA: PublicKey;
+  poolVaultB: PublicKey;
+  sideATotal: BN;
+  sideBTotal: BN;
+  deadline: BN;
+  twapWindow: BN;
+  twapInterval: BN;
+  startPriceA: BN;
+  startPriceB: BN;
+  twapAccumulatorA: BN;
+  twapAccumulatorB: BN;
+  twapSamplesCount: number;
+  lastSampleTs: BN;
+  status: any;
+  winner: number | null;
+  netPool: BN;
+  minDeposit: BN;
+  creatorFeeAccount: PublicKey;
+  protocolFeeAccount: PublicKey;
+  emergencyWindow: BN;
+};
+
+/** Decoded Deposit account data. */
+export type DepositAccount = {
+  duel: PublicKey;
+  depositor: PublicKey;
+  side: number;
+  amount: BN;
+  withdrawn: boolean;
+  bump: number;
+};
 
 // ── Account Fetchers ────────────────────────────────────────────────────
 
@@ -89,6 +136,42 @@ export async function fetchAllMarkets(
 export async function fetchConfig(program: Program<Duel>) {
   const [configPda] = findConfigPda();
   return program.account.programConfig.fetch(configPda);
+}
+
+/**
+ * Fetch a CompareDuel account.
+ */
+export async function fetchCompareDuel(
+  program: Program<Duel>,
+  compareDuel: PublicKey
+): Promise<CompareDuelAccount> {
+  return (program.account as any).compareDuel.fetch(compareDuel);
+}
+
+/**
+ * Fetch a Deposit account.
+ */
+export async function fetchDeposit(
+  program: Program<Duel>,
+  deposit: PublicKey
+): Promise<DepositAccount> {
+  return (program.account as any).deposit.fetch(deposit);
+}
+
+/**
+ * Fetch all CompareDuel accounts (optionally filtered by authority).
+ */
+export async function fetchAllCompareDuels(
+  program: Program<Duel>,
+  authority?: PublicKey
+) {
+  if (authority) {
+    // authority field is at offset 8 (discriminator) + 1 (version) + 1 (bump) = 10
+    return (program.account as any).compareDuel.all([
+      { memcmp: { offset: 10, bytes: authority.toBase58() } },
+    ]);
+  }
+  return (program.account as any).compareDuel.all();
 }
 
 // ── Math Helpers ────────────────────────────────────────────────────────
@@ -819,6 +902,337 @@ export async function buildEmergencyResolveInstruction(
       config: configPda,
       sideA: marketData.sideA,
       sideB: marketData.sideB,
+    })
+    .instruction();
+
+  return { instruction };
+}
+
+// ── Mode 2 (Compare Duel) Instruction Builders ─────────────────────────
+
+/**
+ * Build a create_compare_duel instruction.
+ *
+ * Creates a Mode 2 duel that compares two existing token prices via Pyth oracles.
+ *
+ * @param program - Duel program instance
+ * @param creator - Duel creator public key (payer)
+ * @param duelId - Unique duel ID per creator
+ * @param params - Duel creation parameters
+ * @param quoteMint - Quote token mint (default: NATIVE_MINT / WSOL)
+ */
+export async function buildCreateCompareDuelInstruction(
+  program: Program<Duel>,
+  creator: PublicKey,
+  duelId: number | bigint,
+  params: {
+    deadline: BN;
+    twapWindow: BN;
+    twapInterval: BN;
+    minDeposit: BN;
+    oracleA: PublicKey;
+    oracleB: PublicKey;
+    tokenAMint: PublicKey;
+    tokenBMint: PublicKey;
+    creatorFeeAccount: PublicKey;
+  },
+  quoteMint: PublicKey = NATIVE_MINT
+) {
+  const [compareDuel] = findCompareDuelPda(creator, duelId);
+  const [poolVaultA] = findCompareVaultPda(compareDuel, 0);
+  const [poolVaultB] = findCompareVaultPda(compareDuel, 1);
+  const [configPda] = findConfigPda();
+  const configData = await program.account.programConfig.fetch(configPda);
+
+  const instruction = await (program.methods as any)
+    .createCompareDuel(
+      new BN(duelId.toString()),
+      params.deadline,
+      params.twapWindow,
+      params.twapInterval,
+      params.minDeposit
+    )
+    .accountsPartial({
+      creator,
+      compareDuel,
+      quoteMint,
+      poolVaultA,
+      poolVaultB,
+      oracleA: params.oracleA,
+      oracleB: params.oracleB,
+      config: configPda,
+      protocolFeeAccount: configData.protocolFeeAccount,
+      creatorFeeAccount: params.creatorFeeAccount,
+      tokenAMint: params.tokenAMint,
+      tokenBMint: params.tokenBMint,
+      systemProgram: SystemProgram.programId,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      rent: SYSVAR_RENT_PUBKEY,
+    })
+    .instruction();
+
+  return {
+    instruction,
+    accounts: { compareDuel, poolVaultA, poolVaultB },
+  };
+}
+
+/**
+ * Build a deposit instruction (Mode 2).
+ *
+ * Deposits WSOL into a side of a Compare Duel.
+ *
+ * @param program - Duel program instance
+ * @param compareDuel - CompareDuel account public key
+ * @param side - Side index (0 = A, 1 = B)
+ * @param amount - Amount of WSOL to deposit (lamports)
+ * @param depositor - Depositor's public key
+ * @param quoteMint - Quote token mint (default: NATIVE_MINT / WSOL)
+ */
+export async function buildDepositInstruction(
+  program: Program<Duel>,
+  compareDuel: PublicKey,
+  side: number,
+  amount: BN,
+  depositor: PublicKey,
+  quoteMint: PublicKey = NATIVE_MINT
+) {
+  const duelData = await fetchCompareDuel(program, compareDuel);
+  const [depositRecord] = findDepositPda(compareDuel, depositor);
+  const [configPda] = findConfigPda();
+
+  const poolVault = side === 0 ? duelData.poolVaultA : duelData.poolVaultB;
+  const depositorWsolAccount = await getAssociatedTokenAddress(
+    quoteMint,
+    depositor
+  );
+
+  const instruction = await (program.methods as any)
+    .deposit(side, amount)
+    .accountsPartial({
+      depositor,
+      compareDuel,
+      depositRecord,
+      poolVault,
+      depositorWsolAccount,
+      quoteMint,
+      config: configPda,
+      systemProgram: SystemProgram.programId,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .instruction();
+
+  return { instruction, accounts: { depositRecord } };
+}
+
+/**
+ * Build a record_compare_twap instruction (permissionless cranker).
+ *
+ * Records a TWAP sample from Pyth oracles for both sides.
+ *
+ * @param program - Duel program instance
+ * @param compareDuel - CompareDuel account public key
+ * @param cranker - Cranker's public key (signer)
+ */
+export async function buildRecordCompareTwapInstruction(
+  program: Program<Duel>,
+  compareDuel: PublicKey,
+  cranker: PublicKey
+) {
+  const duelData = await fetchCompareDuel(program, compareDuel);
+
+  const instruction = await (program.methods as any)
+    .recordCompareTwap()
+    .accountsPartial({
+      cranker,
+      compareDuel,
+      oracleA: duelData.oracleA,
+      oracleB: duelData.oracleB,
+    })
+    .instruction();
+
+  return { instruction };
+}
+
+/**
+ * Build a resolve_compare instruction.
+ *
+ * Resolves a Compare Duel based on TWAP performance comparison.
+ * Transfers loser deposits to winner vault, deducts fees.
+ *
+ * @param program - Duel program instance
+ * @param compareDuel - CompareDuel account public key
+ * @param resolver - Resolver's public key (signer/payer)
+ * @param quoteMint - Quote token mint (default: NATIVE_MINT / WSOL)
+ */
+export async function buildResolveCompareInstruction(
+  program: Program<Duel>,
+  compareDuel: PublicKey,
+  resolver: PublicKey,
+  quoteMint: PublicKey = NATIVE_MINT
+) {
+  const duelData = await fetchCompareDuel(program, compareDuel);
+  const [configPda] = findConfigPda();
+
+  const instruction = await (program.methods as any)
+    .resolveCompare()
+    .accountsPartial({
+      resolver,
+      compareDuel,
+      poolVaultA: duelData.poolVaultA,
+      poolVaultB: duelData.poolVaultB,
+      protocolFeeAccount: duelData.protocolFeeAccount,
+      creatorFeeAccount: duelData.creatorFeeAccount,
+      quoteMint,
+      config: configPda,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .instruction();
+
+  return { instruction };
+}
+
+/**
+ * Build a withdraw instruction (Mode 2).
+ *
+ * Withdraws payout after resolution. Winners get proportional share of net_pool.
+ * Losers get zero. Draw returns full deposit.
+ *
+ * @param program - Duel program instance
+ * @param compareDuel - CompareDuel account public key
+ * @param depositor - Depositor's public key (signer)
+ * @param quoteMint - Quote token mint (default: NATIVE_MINT / WSOL)
+ */
+export async function buildWithdrawInstruction(
+  program: Program<Duel>,
+  compareDuel: PublicKey,
+  depositor: PublicKey,
+  quoteMint: PublicKey = NATIVE_MINT
+) {
+  const duelData = await fetchCompareDuel(program, compareDuel);
+  const [depositPda] = findDepositPda(compareDuel, depositor);
+  const depositData = await fetchDeposit(program, depositPda);
+
+  // Determine which vault to withdraw from
+  let poolVault: PublicKey;
+  if (duelData.winner != null) {
+    // Winner gets from winner's vault; loser gets 0 (instruction handles it)
+    poolVault =
+      duelData.winner === 0 ? duelData.poolVaultA : duelData.poolVaultB;
+  } else {
+    // Draw: withdraw from depositor's side vault
+    poolVault =
+      depositData.side === 0 ? duelData.poolVaultA : duelData.poolVaultB;
+  }
+
+  const depositorWsolAccount = await getAssociatedTokenAddress(
+    quoteMint,
+    depositor
+  );
+
+  const instruction = await (program.methods as any)
+    .withdraw()
+    .accountsPartial({
+      depositor,
+      compareDuel,
+      depositRecord: depositPda,
+      poolVault,
+      depositorWsolAccount,
+      quoteMint,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .instruction();
+
+  return { instruction };
+}
+
+/**
+ * Build an emergency_resolve_compare instruction.
+ *
+ * Resolves as a draw when TWAP cranking fails and emergency window has passed.
+ * All depositors can then withdraw their full deposits.
+ *
+ * @param program - Duel program instance
+ * @param compareDuel - CompareDuel account public key
+ * @param resolver - Resolver's public key (signer)
+ */
+export async function buildEmergencyResolveCompareInstruction(
+  program: Program<Duel>,
+  compareDuel: PublicKey,
+  resolver: PublicKey
+) {
+  const [configPda] = findConfigPda();
+
+  const instruction = await (program.methods as any)
+    .emergencyResolveCompare()
+    .accountsPartial({
+      resolver,
+      compareDuel,
+      config: configPda,
+    })
+    .instruction();
+
+  return { instruction };
+}
+
+/**
+ * Build a close_compare_duel instruction.
+ *
+ * Closes the CompareDuel account and vaults to reclaim rent.
+ * Only callable by duel creator or protocol admin after resolution.
+ *
+ * @param program - Duel program instance
+ * @param compareDuel - CompareDuel account public key
+ * @param authority - Duel creator or protocol admin (signer)
+ */
+export async function buildCloseCompareDuelInstruction(
+  program: Program<Duel>,
+  compareDuel: PublicKey,
+  authority: PublicKey
+) {
+  const duelData = await fetchCompareDuel(program, compareDuel);
+  const [configPda] = findConfigPda();
+
+  const instruction = await (program.methods as any)
+    .closeCompareDuel()
+    .accountsPartial({
+      authority,
+      compareDuel,
+      poolVaultA: duelData.poolVaultA,
+      poolVaultB: duelData.poolVaultB,
+      config: configPda,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+
+  return { instruction };
+}
+
+/**
+ * Build a close_deposit instruction.
+ *
+ * Closes the Deposit record account to reclaim rent.
+ * Only callable by the depositor after withdrawal.
+ *
+ * @param program - Duel program instance
+ * @param compareDuel - CompareDuel account public key
+ * @param depositor - Depositor's public key (signer)
+ */
+export async function buildCloseDepositInstruction(
+  program: Program<Duel>,
+  compareDuel: PublicKey,
+  depositor: PublicKey
+) {
+  const [depositPda] = findDepositPda(compareDuel, depositor);
+
+  const instruction = await (program.methods as any)
+    .closeDeposit()
+    .accountsPartial({
+      depositor,
+      depositRecord: depositPda,
+      compareDuel,
+      systemProgram: SystemProgram.programId,
     })
     .instruction();
 
