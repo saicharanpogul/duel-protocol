@@ -74,3 +74,47 @@ pub struct EmergencyResolved {
     pub resolver: Pubkey,
     pub timestamp: i64,
 }
+
+// Mode 2 (Compare Duel) events
+
+#[event]
+pub struct CompareDuelCreated {
+    pub duel: Pubkey,
+    pub authority: Pubkey,
+    pub token_a_mint: Pubkey,
+    pub token_b_mint: Pubkey,
+    pub deadline: i64,
+}
+
+#[event]
+pub struct Deposited {
+    pub duel: Pubkey,
+    pub depositor: Pubkey,
+    pub side: u8,
+    pub amount: u64,
+}
+
+#[event]
+pub struct CompareTwapSampled {
+    pub duel: Pubkey,
+    pub price_a: u64,
+    pub price_b: u64,
+    pub sample_count: u32,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct CompareResolved {
+    pub duel: Pubkey,
+    pub winner: Option<u8>,
+    pub perf_a_bps: i64,
+    pub perf_b_bps: i64,
+    pub net_pool: u64,
+}
+
+#[event]
+pub struct Withdrawn {
+    pub duel: Pubkey,
+    pub depositor: Pubkey,
+    pub payout: u64,
+}

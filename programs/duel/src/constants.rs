@@ -25,3 +25,11 @@ pub const DEFAULT_EMERGENCY_WINDOW: u64 = 86_400; // 24 hours after deadline
 // Graduation
 pub const MIN_GRADUATION_RESERVE: u64 = 100_000_000; // 0.1 SOL minimum to graduate
 pub const GRADUATION_POOL_FEE_BPS: u16 = 25; // 0.25% Meteora pool trading fee
+
+// Mode 2 (Compare Duel) constants
+pub const DEFAULT_MIN_DEPOSIT: u64 = 10_000; // 10K lamports minimum deposit
+pub const PYTH_PRICE_MAGIC: u32 = 0xa1b2c3d4;
+pub const PYTH_PRICE_OFFSET: usize = 208;
+pub const PRICE_SCALE: u64 = 1_000_000_000; // 10^9 precision
+pub const MAX_ORACLE_AGE_SECS: i64 = 60; // Max 60 seconds stale
+pub const MAX_CONFIDENCE_PCT: u64 = 10; // 10% max confidence/price ratio

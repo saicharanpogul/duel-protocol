@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "programs/*"
+    "programs/duel"
 ]
 resolver = "2"
 

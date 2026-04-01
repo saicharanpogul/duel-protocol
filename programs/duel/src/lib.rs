@@ -128,4 +128,49 @@ pub mod duel {
     ) -> Result<()> {
         instructions::emergency_resolve::handler(ctx)
     }
+
+    // Mode 2 (Duel Compare) instructions
+
+    pub fn create_compare_duel(
+        ctx: Context<CreateCompareDuel>,
+        duel_id: u64,
+        deadline: i64,
+        twap_window: u64,
+        twap_interval: u64,
+        min_deposit: u64,
+    ) -> Result<()> {
+        instructions::create_compare_duel::handler(ctx, duel_id, deadline, twap_window, twap_interval, min_deposit)
+    }
+
+    pub fn deposit(
+        ctx: Context<DepositSol>,
+        side: u8,
+        amount: u64,
+    ) -> Result<()> {
+        instructions::deposit::handler(ctx, side, amount)
+    }
+
+    pub fn record_compare_twap(ctx: Context<RecordCompareTwap>) -> Result<()> {
+        instructions::record_compare_twap::handler(ctx)
+    }
+
+    pub fn resolve_compare(ctx: Context<ResolveCompare>) -> Result<()> {
+        instructions::resolve_compare::handler(ctx)
+    }
+
+    pub fn withdraw(ctx: Context<Withdraw>) -> Result<()> {
+        instructions::withdraw::handler(ctx)
+    }
+
+    pub fn emergency_resolve_compare(ctx: Context<EmergencyResolveCompare>) -> Result<()> {
+        instructions::emergency_resolve_compare::handler(ctx)
+    }
+
+    pub fn close_compare_duel(ctx: Context<CloseCompareDuel>) -> Result<()> {
+        instructions::close_compare_duel::handler(ctx)
+    }
+
+    pub fn close_deposit(ctx: Context<CloseDeposit>) -> Result<()> {
+        instructions::close_deposit::handler(ctx)
+    }
 }

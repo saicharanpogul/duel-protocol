@@ -44,4 +44,24 @@ pub enum DuelError {
     EmergencyOnlyOperation,
     #[msg("Insufficient reserve for DEX graduation (minimum 0.1 SOL)")]
     InsufficientReserveForGraduation,
+
+    // Mode 2 (Compare Duel) errors
+    #[msg("Oracle account is not a valid Pyth price feed")]
+    InvalidOracle,
+    #[msg("Oracle price is stale (older than 60 seconds)")]
+    OracleStale,
+    #[msg("Oracle confidence interval exceeds 10% of price")]
+    OracleConfidenceTooWide,
+    #[msg("Duel must be resolved before withdrawal")]
+    DuelNotResolved,
+    #[msg("Deposit has already been withdrawn")]
+    AlreadyWithdrawn,
+    #[msg("Deposit amount is below minimum")]
+    DepositTooSmall,
+    #[msg("Deposit period has ended (TWAP window started)")]
+    DepositPeriodEnded,
+    #[msg("Cannot resolve: one side has zero deposits")]
+    OneSideEmpty,
+    #[msg("Losing side has no payout")]
+    NotWinner,
 }

@@ -1,5 +1,6 @@
 #![allow(ambiguous_glob_reexports)]
 
+// Mode 1 (Duel Mint) instructions
 pub mod initialize_market;
 pub mod initialize_config;
 pub mod update_config;
@@ -25,3 +26,22 @@ pub use close_quote_vault::*;
 pub use claim_pool_fees::*;
 pub use close_market::*;
 pub use emergency_resolve::*;
+
+// Mode 2 (Duel Compare) instructions
+pub mod create_compare_duel;
+pub mod deposit;
+pub mod record_compare_twap;
+pub mod resolve_compare;
+pub mod withdraw;
+pub mod emergency_resolve_compare;
+pub mod close_compare_duel;
+pub mod close_deposit;
+
+pub use create_compare_duel::*;
+pub use deposit::*;
+pub use record_compare_twap::*;
+pub use resolve_compare::*;
+pub use withdraw::*;
+pub use emergency_resolve_compare::*;
+pub use close_compare_duel::*;
+pub use close_deposit::*;

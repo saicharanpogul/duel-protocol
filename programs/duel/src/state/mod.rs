@@ -1,7 +1,11 @@
+pub mod compare_duel;
+pub mod deposit;
 pub mod market;
 pub mod program_config;
 pub mod side;
 
+pub use compare_duel::*;
+pub use deposit::*;
 pub use market::*;
 pub use program_config::*;
 pub use side::*;
