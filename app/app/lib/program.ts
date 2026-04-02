@@ -32,6 +32,8 @@ export interface DuelProgram {
     market: AccountFetcher<MarketAccount>;
     side: AccountFetcher<SideAccount>;
     programConfig: AccountFetcher<ProgramConfigAccount>;
+    compareDuel: AccountFetcher<CompareDuelAccount>;
+    deposit: AccountFetcher<DepositAccount>;
   };
   methods: Program["methods"];
   programId: PublicKey;
@@ -215,4 +217,124 @@ export function formatCountdown(deadline: number): string {
 
 export function shortenAddress(addr: string, chars = 4): string {
   return `${addr.slice(0, chars)}...${addr.slice(-chars)}`;
+}
+
+/* ================================================================ */
+/*  Mode 2 (Compare Duel) types                                      */
+/* ================================================================ */
+
+export interface CompareDuelAccount {
+  version: number;
+  bump: number;
+  authority: PublicKey;
+  duelId: { toNumber(): number };
+  tokenAMint: PublicKey;
+  tokenBMint: PublicKey;
+  oracleA: PublicKey;
+  oracleB: PublicKey;
+  poolVaultA: PublicKey;
+  poolVaultB: PublicKey;
+  sideATotal: { toNumber(): number };
+  sideBTotal: { toNumber(): number };
+  deadline: { toNumber(): number };
+  twapWindow: { toNumber(): number };
+  twapInterval: { toNumber(): number };
+  startPriceA: { toNumber(): number };
+  startPriceB: { toNumber(): number };
+  twapAccumulatorA: { toNumber(): number };
+  twapAccumulatorB: { toNumber(): number };
+  twapSamplesCount: number;
+  lastSampleTs: { toNumber(): number };
+  status: { active?: object; twapObservation?: object; resolved?: object };
+  winner: number | null;
+  netPool: { toNumber(): number };
+  minDeposit: { toNumber(): number };
+  creatorFeeAccount: PublicKey;
+  protocolFeeAccount: PublicKey;
+  emergencyWindow: { toNumber(): number };
+}
+
+export interface DepositAccount {
+  duel: PublicKey;
+  depositor: PublicKey;
+  side: number;
+  amount: { toNumber(): number };
+  withdrawn: boolean;
+  bump: number;
+}
+
+/* Mode 2 PDA derivations */
+
+export function findCompareDuelPda(creator: PublicKey, duelId: bigint | number): PublicKey {
+  const bn = new (require("bn.js"))(duelId.toString());
+  const buf = bn.toArrayLike(Buffer, "le", 8);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("compare_duel"), creator.toBuffer(), buf],
+    PROGRAM_ID
+  )[0];
+}
+
+export function findCompareVaultPda(compareDuel: PublicKey, sideIndex: number): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("compare_vault"), compareDuel.toBuffer(), Buffer.from([sideIndex])],
+    PROGRAM_ID
+  )[0];
+}
+
+export function findDepositPda(compareDuel: PublicKey, depositor: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("deposit"), compareDuel.toBuffer(), depositor.toBuffer()],
+    PROGRAM_ID
+  )[0];
+}
+
+/* Mode 2 status helper */
+
+export type ComparePhase = "active" | "twap" | "resolved";
+
+export function getComparePhase(duel: CompareDuelAccount): ComparePhase {
+  if (duel.status?.resolved) return "resolved";
+  const now = Date.now() / 1000;
+  const deadline = duel.deadline.toNumber();
+  const twapStart = deadline - duel.twapWindow.toNumber();
+  if (now >= twapStart && now < deadline) return "twap";
+  if (now >= deadline) return "resolved";
+  return "active";
+}
+
+/* Known token oracle mapping for Mode 2 */
+
+export const KNOWN_TOKENS: Record<string, { symbol: string; mint: string; oracle: string }> = {
+  SOL: {
+    symbol: "SOL",
+    mint: "So11111111111111111111111111111111111111112",
+    oracle: "H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG",
+  },
+  BONK: {
+    symbol: "BONK",
+    mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+    oracle: "8ihFLu5FimgTQ1Unh4dVyEHUGodJ5gJQCR9BMy3NKCQ5",
+  },
+  WIF: {
+    symbol: "WIF",
+    mint: "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
+    oracle: "6ABgrEZk8urs6kJ1JNdC1sspH5zKXRqxy8sg3ZG2cQps",
+  },
+  JUP: {
+    symbol: "JUP",
+    mint: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+    oracle: "g6eRCbboSwK4tSWngn773RCMexr1APQr4uA9bGZBYfo",
+  },
+  RENDER: {
+    symbol: "RENDER",
+    mint: "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof",
+    oracle: "HAm5DZhrgrWa12heKSNj4fLvoAuJR4M8pMridwRGE8Sn",
+  },
+};
+
+export function getTokenSymbolFromMint(mint: string): string | null {
+  for (const [, info] of Object.entries(KNOWN_TOKENS)) {
+    if (info.mint === mint) return info.symbol;
+  }
+  return null;
 }

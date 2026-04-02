@@ -50,6 +50,41 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ─── Two Modes ─── */}
+      <section className={styles.howSection}>
+        <div className={styles.sectionLabel}>Two ways to duel</div>
+
+        <div className={styles.modesRow}>
+          {/* Mode 1 */}
+          <div className={styles.modeCard}>
+            <div className={styles.modeTag} style={{ color: "#2BA4E0" }}>Mode 1</div>
+            <div className={styles.modeTitle}>Mint &amp; Battle</div>
+            <p className={styles.modeDesc}>
+              Two brand-new tokens launch on bonding curves.
+              Buy the one you believe in. Sell anytime.
+              Winner gets loser&#39;s liquidity and graduates to DEX.
+            </p>
+            <Link href="/duels" className={styles.modeLink}>
+              Browse duels
+            </Link>
+          </div>
+
+          {/* Mode 2 */}
+          <div className={styles.modeCard}>
+            <div className={styles.modeTag} style={{ color: "#FFE233" }}>Mode 2</div>
+            <div className={styles.modeTitle}>Compare &amp; Win</div>
+            <p className={styles.modeDesc}>
+              Pick two existing tokens like $BONK and $WIF.
+              Deposit SOL on the one you think outperforms.
+              Oracle-based TWAP decides. Winner takes the pool.
+            </p>
+            <Link href="/compare" className={styles.modeLinkB}>
+              Browse compare duels
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* ─── How It Works ─── */}
       <section className={styles.howSection}>
         <div className={styles.sectionLabel}>How it works</div>
@@ -61,7 +96,7 @@ export default function LandingPage() {
             </div>
             <div className={styles.stepTitle}>Pick a side</div>
             <p className={styles.stepDesc}>
-              Two tokens launch. You buy the one you believe in.
+              Two tokens fight. Buy one or deposit on one.
             </p>
           </div>
 
@@ -69,9 +104,9 @@ export default function LandingPage() {
             <div className={`${styles.stepNumber} ${styles.stepNumberYellow}`}>
               02
             </div>
-            <div className={styles.stepTitle}>Price moves</div>
+            <div className={styles.stepTitle}>Market moves</div>
             <p className={styles.stepDesc}>
-              Bonding curve. More buyers = higher price. Sell anytime.
+              Bonding curve or oracle prices. The market decides sentiment.
             </p>
           </div>
 
@@ -89,9 +124,9 @@ export default function LandingPage() {
             <div className={`${styles.stepNumber} ${styles.stepNumberYellow}`}>
               04
             </div>
-            <div className={styles.stepTitle}>Winner graduates</div>
+            <div className={styles.stepTitle}>Winner takes all</div>
             <p className={styles.stepDesc}>
-              Loser&#39;s SOL goes to winner. Token launches on Jupiter.
+              Loser&#39;s SOL goes to winner. Token graduates or pool pays out.
             </p>
           </div>
         </div>
@@ -103,7 +138,7 @@ export default function LandingPage() {
         <div className={styles.statsDivider} />
         <div className={styles.statsItem}>Winner takes all</div>
         <div className={styles.statsDivider} />
-        <div className={styles.statsItem}>Jupiter-listed</div>
+        <div className={styles.statsItem}>Oracle-powered</div>
       </div>
 
       {/* ─── Bottom CTA ─── */}
@@ -114,8 +149,14 @@ export default function LandingPage() {
           <Link href="/create" className={styles.ctaLinkPrimary}>
             Create a duel
           </Link>
+          <Link href="/compare/create" className={styles.ctaLinkPrimary}>
+            Create a compare duel
+          </Link>
           <Link href="/duels" className={styles.ctaLinkSecondary}>
             Browse duels
+          </Link>
+          <Link href="/compare" className={styles.ctaLinkSecondary}>
+            Browse compare
           </Link>
         </div>
       </section>

@@ -93,6 +93,26 @@ export default function Navbar() {
           Duels
         </Link>
         <Link
+          href="/compare"
+          style={{
+            padding: "6px 16px",
+            fontSize: "0.85rem",
+            fontWeight: 500,
+            color:
+              pathname === "/compare" || pathname?.startsWith("/compare/")
+                ? "#eaeaef"
+                : "#8a8a9a",
+            background:
+              pathname === "/compare" || pathname?.startsWith("/compare/")
+                ? "rgba(255,255,255,0.06)"
+                : "transparent",
+            textDecoration: "none",
+            transition: "color 0.15s",
+          }}
+        >
+          Compare
+        </Link>
+        <Link
           href="/create"
           style={{
             padding: "6px 16px",
