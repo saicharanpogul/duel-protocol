@@ -10,7 +10,7 @@ env:
   SOLANA_VERSION: "2.1.7"
   ANCHOR_VERSION: "0.31.1"
   NODE_VERSION: "20"
-  RUST_TOOLCHAIN: "1.83.0"
+  RUST_TOOLCHAIN: "1.86.0"
 
 jobs:
   build-and-test:
