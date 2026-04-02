@@ -3,7 +3,7 @@ import { Connection, PublicKey, Keypair, Transaction, VersionedTransaction } fro
 import IDL from "./idl.json";
 
 export const PROGRAM_ID = new PublicKey("3kzt4Q7xN2RLzYYx2HfnqZVoAHFAKKa17hTDvXsy1PQ9");
-export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "http://localhost:8899";
+export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://api.devnet.solana.com";
 
 // Hardcoded curve constants (match program)
 export const CURVE_A = 1;
