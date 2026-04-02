@@ -16,7 +16,8 @@ import BN from "bn.js";
 import { readFileSync } from "fs";
 
 const PROGRAM_ID = new PublicKey("3kzt4Q7xN2RLzYYx2HfnqZVoAHFAKKa17hTDvXsy1PQ9");
-const conn = new anchor.web3.Connection("http://localhost:8899", "confirmed");
+const RPC_URL = process.env.RPC_URL || "https://api.devnet.solana.com";
+const conn = new anchor.web3.Connection(RPC_URL, "confirmed");
 const wallet = anchor.AnchorProvider.env().wallet;
 const provider = new anchor.AnchorProvider(conn, wallet, { commitment: "confirmed" });
 const idl = JSON.parse(readFileSync("./target/idl/duel.json", "utf-8"));
@@ -119,50 +120,18 @@ async function main() {
     console.log(`  OK (${cu.toLocaleString()} CU)`);
   }
 
-  // ─── Step 2: Create mock oracle accounts ───
-  console.log("\n[2/8] Create mock Pyth oracles...");
+  // ─── Step 2: Use real Pyth devnet oracle feeds ───
+  console.log("\n[2/8] Using real Pyth devnet oracles...");
 
-  // We need accounts with Pyth data layout. On localnet, the easiest approach
-  // is to create accounts and then use airdrop to have the validator write data.
-  // But since we can't write arbitrary data from client, let's create the oracles
-  // as keypairs and pass them as UncheckedAccount.
-  // The program reads oracle data in record_compare_twap, not in create_compare_duel.
-  // So for create, we just need valid Pubkeys.
+  // SOL/USD Pyth devnet feed
+  const oracleA = { publicKey: new PublicKey("J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix") };
+  // Use a second Pyth feed with active price data
+  // Find one with non-zero price from devnet
+  const oracleB = { publicKey: new PublicKey("E1n8HR9SLEqp5SxhGg2K5MuYMJNL3rvY8HS2TqvRjWpc") };
 
-  const oracleA = Keypair.generate();
-  const oracleB = Keypair.generate();
-
-  // Create oracle accounts with Pyth V2 data using the test validator's setAccount
-  // Actually, let's try a different approach: create the accounts owned by SystemProgram
-  // and pre-fill with Pyth data
-
-  const pythDataA = createPythPriceData(2000000, -8, 50000); // $0.02 (BONK-like)
-  const pythDataB = createPythPriceData(50000000000, -8, 100000000); // $500 (SOL-like)
-
-  // Fund oracle accounts
-  const fundTx = new Transaction();
-  const rentA = await conn.getMinimumBalanceForRentExemption(pythDataA.length);
-  fundTx.add(
-    SystemProgram.createAccount({
-      fromPubkey: wallet.publicKey,
-      newAccountPubkey: oracleA.publicKey,
-      lamports: rentA,
-      space: pythDataA.length,
-      programId: SystemProgram.programId,
-    }),
-    SystemProgram.createAccount({
-      fromPubkey: wallet.publicKey,
-      newAccountPubkey: oracleB.publicKey,
-      lamports: rentA,
-      space: pythDataB.length,
-      programId: SystemProgram.programId,
-    })
-  );
-  await provider.sendAndConfirm(fundTx, [oracleA, oracleB]);
-
-  console.log(`  Oracle A: ${oracleA.publicKey.toString().slice(0, 12)}...`);
-  console.log(`  Oracle B: ${oracleB.publicKey.toString().slice(0, 12)}...`);
-  results.push({ step: "create_oracles", status: "OK" });
+  console.log(`  Oracle A (SOL/USD): ${oracleA.publicKey.toString().slice(0, 16)}...`);
+  console.log(`  Oracle B (Feed 2):  ${oracleB.publicKey.toString().slice(0, 16)}...`);
+  results.push({ step: "use_pyth_oracles", status: "OK" });
 
   // ─── Step 3: Create Compare Duel ───
   console.log("\n[3/8] Create Compare Duel...");
@@ -384,7 +353,12 @@ async function main() {
   try {
     const duelData = await (program.account as any).compareDuel.fetch(compareDuel);
     const winner = duelData.winner;
-    const winnerVault = winner === 0 ? poolVaultA : poolVaultB;
+    // For draws (winner=null), use the vault matching the depositor's side
+    const depositData = await (program.account as any).deposit.fetch(depositPda);
+    const depositorSide = depositData.side;
+    const winnerVault = winner !== null
+      ? (winner === 0 ? poolVaultA : poolVaultB)
+      : (depositorSide === 0 ? poolVaultA : poolVaultB);
 
     const sig = await (program.methods as any)
       .withdraw()

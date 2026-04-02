@@ -3,17 +3,28 @@ use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::DuelError;
 
+/// Pyth V2 exponent offset (in the header, NOT next to the price)
+const PYTH_EXPO_OFFSET: usize = 20;
+
 /// Read price, confidence, and exponent from a Pyth V2 price account.
-/// Validates the magic number and returns raw values.
+/// Layout: magic(0), version(4), type(8), size(12), ptype(16), expo(20),
+///         ... price(208), conf(216)
 pub fn read_pyth_price(data: &[u8]) -> Result<(i64, u64, i32)> {
-    // Pyth V2 price account must be at least 228 bytes
-    require!(data.len() >= PYTH_PRICE_OFFSET + 20, DuelError::InvalidOracle);
+    require!(data.len() >= PYTH_PRICE_OFFSET + 16, DuelError::InvalidOracle);
 
     let magic = u32::from_le_bytes(
         data[0..4].try_into().map_err(|_| DuelError::InvalidOracle)?,
     );
     require!(magic == PYTH_PRICE_MAGIC, DuelError::InvalidOracle);
 
+    // Exponent is in the header at offset 20
+    let expo = i32::from_le_bytes(
+        data[PYTH_EXPO_OFFSET..PYTH_EXPO_OFFSET + 4]
+            .try_into()
+            .map_err(|_| DuelError::InvalidOracle)?,
+    );
+
+    // Price at offset 208, confidence at offset 216
     let price = i64::from_le_bytes(
         data[PYTH_PRICE_OFFSET..PYTH_PRICE_OFFSET + 8]
             .try_into()
@@ -21,11 +32,6 @@ pub fn read_pyth_price(data: &[u8]) -> Result<(i64, u64, i32)> {
     );
     let conf = u64::from_le_bytes(
         data[PYTH_PRICE_OFFSET + 8..PYTH_PRICE_OFFSET + 16]
-            .try_into()
-            .map_err(|_| DuelError::InvalidOracle)?,
-    );
-    let expo = i32::from_le_bytes(
-        data[PYTH_PRICE_OFFSET + 16..PYTH_PRICE_OFFSET + 20]
             .try_into()
             .map_err(|_| DuelError::InvalidOracle)?,
     );
