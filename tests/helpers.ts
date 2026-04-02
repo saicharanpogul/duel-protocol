@@ -106,14 +106,17 @@ export async function wrapSol(
   try {
     await getAccount(provider.connection, ata);
   } catch {
-    tx.add(createAssociatedTokenAccountInstruction(owner, ata, owner, NATIVE_MINT));
+    // Wallet pays ATA creation rent, owner is the ATA holder
+    tx.add(createAssociatedTokenAccountInstruction(
+      signers && signers.length > 0 ? provider.wallet.publicKey : owner,
+      ata, owner, NATIVE_MINT
+    ));
   }
 
   tx.add(SystemProgram.transfer({ fromPubkey: owner, toPubkey: ata, lamports: amount }));
   tx.add(createSyncNativeInstruction(ata));
 
   if (signers && signers.length > 0) {
-    tx.feePayer = owner;
     await provider.sendAndConfirm(tx, signers);
   } else {
     await provider.sendAndConfirm(tx);
