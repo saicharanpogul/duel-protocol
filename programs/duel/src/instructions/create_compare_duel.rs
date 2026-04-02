@@ -127,14 +127,8 @@ pub fn handler(
         DEFAULT_MIN_DEPOSIT
     };
 
-    // Validate oracle accounts have valid Pyth magic numbers
-    let oracle_a_data = ctx.accounts.oracle_a.try_borrow_data()?;
-    oracle::read_pyth_price(&oracle_a_data)?;
-    drop(oracle_a_data);
-
-    let oracle_b_data = ctx.accounts.oracle_b.try_borrow_data()?;
-    oracle::read_pyth_price(&oracle_b_data)?;
-    drop(oracle_b_data);
+    // Oracle accounts are validated during TWAP sampling (record_compare_twap),
+    // not at creation. This allows creating duels before oracles are live.
 
     // Token mints must be different
     require!(
