@@ -47,3 +47,46 @@ theorem concrete_draw_refund :
 theorem concrete_loser_zero :
     winnerPayout ⟨1, 500000000⟩ ⟨1000000000, 500000000, 1500000000, some 0⟩ = 0 := by
   native_decide
+
+-- ═══════════════════════════════════════════════════════════════════
+-- M2-3: Net pool conservation
+-- net_pool = total_pool - fees
+-- ═══════════════════════════════════════════════════════════════════
+
+def BPS_DENOM : Nat := 10000
+
+-- Fee calculation: fee = total * fee_bps / BPS_DENOM
+def calcFee (total feeBps : Nat) : Nat :=
+  total * feeBps / BPS_DENOM
+
+-- Net pool after fees
+def calcNetPool (sideATotal sideBTotal feeBps : Nat) : Nat :=
+  let totalPool := sideATotal + sideBTotal
+  let fee := calcFee totalPool feeBps
+  totalPool - fee
+
+-- M2-3: net_pool = total - fee (by definition)
+theorem net_pool_is_total_minus_fee (sideA sideB feeBps : Nat) :
+    calcNetPool sideA sideB feeBps =
+    (sideA + sideB) - calcFee (sideA + sideB) feeBps := by
+  rfl
+
+-- M2-3b: net_pool <= total pool (fees are non-negative)
+theorem net_pool_le_total (sideA sideB feeBps : Nat) :
+    calcNetPool sideA sideB feeBps ≤ sideA + sideB := by
+  unfold calcNetPool calcFee
+  exact Nat.sub_le _ _
+
+-- M2-3c: With 1% fee (100 bps), net_pool is 99% of total
+-- Concrete: 1.5 SOL pool, 1% fee → fee = 15M lamports, net = 1.485 SOL
+theorem concrete_fee_calculation :
+    calcFee 1500000000 100 = 15000000 := by native_decide
+
+theorem concrete_net_pool :
+    calcNetPool 1000000000 500000000 100 = 1485000000 := by native_decide
+
+-- M2-3d: Zero fee means net_pool = total
+theorem zero_fee_no_deduction (sideA sideB : Nat) :
+    calcNetPool sideA sideB 0 = sideA + sideB := by
+  unfold calcNetPool calcFee
+  simp [Nat.zero_div, Nat.sub_zero]

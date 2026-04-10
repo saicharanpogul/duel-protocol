@@ -60,3 +60,49 @@ theorem resolved_blocks_re_resolve (m : ResolvedMarket) (w : Nat)
     resolveTransition m w = none := by
   unfold resolveTransition
   simp [h]
+
+-- ═══════════════════════════════════════════════════════════════════
+-- SM-3: Deposit immutability
+-- Side and amount never change. Only withdrawn can flip false -> true.
+-- ═══════════════════════════════════════════════════════════════════
+
+structure DepositRecord where
+  side : Nat
+  amount : Nat
+  withdrawn : Bool
+  deriving DecidableEq
+
+-- Only allowed mutation: set withdrawn = true
+def withdrawDeposit (d : DepositRecord) : Option DepositRecord :=
+  if d.withdrawn = false then
+    some { side := d.side, amount := d.amount, withdrawn := true }
+  else none
+
+theorem withdraw_preserves_side (d : DepositRecord) (d' : DepositRecord)
+    (h : withdrawDeposit d = some d') :
+    d'.side = d.side := by
+  unfold withdrawDeposit at h
+  split at h
+  · simp at h; cases h; rfl
+  · simp at h
+
+theorem withdraw_preserves_amount (d : DepositRecord) (d' : DepositRecord)
+    (h : withdrawDeposit d = some d') :
+    d'.amount = d.amount := by
+  unfold withdrawDeposit at h
+  split at h
+  · simp at h; cases h; rfl
+  · simp at h
+
+theorem withdraw_sets_true (d : DepositRecord) (d' : DepositRecord)
+    (h : withdrawDeposit d = some d') :
+    d'.withdrawn = true := by
+  unfold withdrawDeposit at h
+  split at h
+  · simp at h; cases h; rfl
+  · simp at h
+
+theorem double_withdraw_blocked (d : DepositRecord)
+    (h : d.withdrawn = true) :
+    withdrawDeposit d = none := by
+  unfold withdrawDeposit; simp [h]
