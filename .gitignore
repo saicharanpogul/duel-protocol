@@ -38,3 +38,10 @@ keypair.json
 # Package manager lockfiles (bun only)
 package-lock.json
 yarn.lock
+.gstack/
+
+# Skills
+.agents/
+lake-packages/
+.lake/
+lean_verification/
